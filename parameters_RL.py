@@ -24,15 +24,18 @@ par = {
     'synapse_config'        : 'std_stf',     # Full is 'std_stf'
     'exc_inh_prop'          : 0.8,      # Literature 0.8, for EI off 1
     'var_delay'             : False,
-
+    'LSTM'                  : True,
 
     # Network shape
     'num_motion_tuned'      : 64,
     'num_fix_tuned'         : 4,
-    'num_rule_tuned'        : 20,
+    'num_rule_tuned'        : 0,
     'n_hidden'              : 256,
+    'n_d_hidden'            : 100, # distill hidden neurons
+    'n_val_hidden'          : 200,
     'n_dendrites'           : 1, # don't use for now
     'n_val'                 : 1,
+    'include_rule_signal'   : False,
 
     # Euclidean shape
     'num_sublayers'         : 1,
@@ -42,23 +45,23 @@ par = {
 
     # Timings and rates
     'dt'                    : 20,
-    'learning_rate'         : 4e-3,
+    'learning_rate'         : 5e-4,
     'membrane_time_constant': 100,
     'connection_prob'       : 1.0,
-    'discount_rate'         : 0.0,
+    'discount_rate'         : 0.,
 
     # Variance values
     'clip_max_grad_val'     : 1.0,
     'input_mean'            : 0.0,
-    'noise_in_sd'           : 0.,
-    'noise_rnn_sd'          : 0.1,
+    'noise_in_sd'           : 0.0,
+    'noise_rnn_sd'          : 0.05,
 
     # Task specs
     'task'                  : 'multistim',
     'n_tasks'               : 20,
-    'multistim_trial_length': 2500,
-    'mask_duration'         : 260,
-    'dead_time'             : 300,
+    'multistim_trial_length': 2000,
+    'mask_duration'         : 0,
+    'dead_time'             : 200,
 
     # Tuning function data
     'num_motion_dirs'       : 8,
@@ -66,30 +69,35 @@ par = {
     'kappa'                 : 2.0,        # concentration scaling factor for von Mises
 
     # Cost parameters
-    'spike_cost'            : 1e-6,
+    'spike_cost'            : 1e-7,
     'weight_cost'           : 0.,
-    'entropy_cost'          : 0.,
+    'entropy_cost'          : 0.005,
+    'drop_rate'             : 0.2,
 
     # Synaptic plasticity specs
-    'tau_fast'              : 200,
-    'tau_slow'              : 1500,
+    'tau_fast'              : 100,
+    'tau_slow'              : 1000,
     'U_stf'                 : 0.15,
     'U_std'                 : 0.45,
 
     # Training specs
     'batch_size'            : 256,
-    'n_train_batches'       : 3000,
+    'n_train_batches'       : 50000,
 
     # Omega parameters
-    'omega_c'               : 1.,
+    'omega_c'               : 0.05,
     'omega_xi'              : 0.01,
     'EWC_fisher_num_batches': 16,   # number of batches when calculating EWC
-    'include_val_stab'      : 1., # 1. or 0.
 
     # Gating parameters
     'gating_type'           : 'XdG', # 'XdG', 'partial', 'split', None
-    'gate_pct'              : 0.75,  # Num. gated hidden units for 'XdG' only
+    'gate_pct'              : 0.8,  # Num. gated hidden units for 'XdG' only
     'n_subnetworks'         : 4,    # Num. subnetworks for 'split' only
+
+    # Stimulus parameters
+    'fix_break_penalty'     : -1.,
+    'wrong_choice_penalty'  : -0.01,
+    'correct_choice_reward' : 1.,
 
     # Save paths
     'save_fn'               : 'model_results.pkl',
@@ -120,9 +128,18 @@ def gen_gating():
     Generate the gating signal to applied to all hidden units
     """
     par['gating'] = []
+    par['val_gating'] = []
 
     for t in range(par['n_tasks']):
         gating_task = np.zeros(par['n_hidden'], dtype=np.float32)
+        val_gating_task = np.zeros(par['n_val_hidden'], dtype=np.float32)
+        for i in range(par['n_val_hidden']):
+            if par['gating_type'] == 'XdG':
+                if np.random.rand() < 1-par['gate_pct']:
+                    val_gating_task[i] = 1
+                elif par['gating_type'] is None:
+                    val_gating_task[i] = 1
+
         for i in range(par['n_hidden']):
 
             if par['gating_type'] == 'XdG':
@@ -146,6 +163,7 @@ def gen_gating():
                 gating_task[i] = 1
 
         par['gating'].append(gating_task)
+        par['val_gating'].append(val_gating_task)
 
 
 
@@ -184,6 +202,15 @@ def update_dependencies():
     Updates all parameter dependencies
     """
 
+    if par['exc_inh_prop'] < 1 and not par['LSTM']:
+        par['EI'] = True
+    elif par['LSTM']:
+        print('Using LSTM networks; setting to EI to False')
+        par['EI'] = False
+        par['exc_inh_prop'] = 1.
+        par['synapse_config'] = False
+        par['spike_cost'] = 0.
+
     # Number of output neurons
     par['n_output'] = par['num_motion_dirs'] + 1
     par['n_pol'] = par['num_motion_dirs'] + 1
@@ -206,11 +233,13 @@ def update_dependencies():
 
     par['num_exc_units'] = int(np.round(par['n_hidden']*par['exc_inh_prop']))
     par['num_inh_units'] = par['n_hidden'] - par['num_exc_units']
-    n = par['n_hidden']//par['num_inh_units']
-    par['ind_inh'] = np.arange(n-1,par['n_hidden'],n)
     par['EI_list'] = np.ones(par['n_hidden'], dtype=np.float32)
-    par['EI_list'][par['ind_inh']] = -1.
+    if par['EI']:
+        n = par['n_hidden']//par['num_inh_units']
+        par['ind_inh'] = np.arange(n-1,par['n_hidden'],n)
+        par['EI_list'][par['ind_inh']] = -1.
     par['EI_matrix'] = np.diag(par['EI_list'])
+
 
     # Membrane time constant of RNN neurons
     par['alpha_neuron'] = np.float32(par['dt'])/par['membrane_time_constant']
@@ -228,13 +257,18 @@ def update_dependencies():
     ####################################################################
 
     par['h_init'] = 0.1*np.ones((par['batch_size'], par['n_hidden']), dtype=np.float32)
+    par['h_d_init'] = 0.1*np.ones((par['batch_size'], par['n_d_hidden']), dtype=np.float32)
 
     # Initialize input weights
-    c = 0.05
+    c = 0.1
     if par['EI']:
-        par['W_rnn_init'] = np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_hidden'], par['n_hidden']]))
+        par['W_rnn_init'] = c*np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_hidden'], par['n_hidden']]))
         par['W_rnn_mask'] = np.ones((par['n_hidden'], par['n_hidden']), dtype=np.float32) - np.eye(par['n_hidden'])
         par['W_rnn_init'] *= par['W_rnn_mask']
+
+        par['W_d_rnn_init'] = 0.05*np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_d_hidden'], par['n_d_hidden']]))
+        par['W_d_rnn_mask'] = np.ones((par['n_d_hidden'], par['n_d_hidden']), dtype=np.float32) - np.eye(par['n_d_hidden'])
+        par['W_d_rnn_init'] *= par['W_d_rnn_mask']
     else:
         par['W_rnn_init'] =  np.float32(np.random.uniform(-c, c, size = [par['n_hidden'], par['n_hidden']]))
         par['W_rnn_mask'] = np.ones((par['n_hidden'], par['n_hidden']), dtype=np.float32)
@@ -242,7 +276,7 @@ def update_dependencies():
     if par['synapse_config'] == None:
         par['W_rnn_init'] /= (spectral_radius(par['W_rnn_init'])/2)
     """
-    #par['W_rnn_init'][par['ind_inh'], :] *= 4
+    #par['W_rnn_init'][par['ind_inh'],: ] *= 4
 
     #s = np.dot(par['EI_matrix'], par['W_rnn_init'])
     #plt.imshow(s, aspect = 'auto')
@@ -254,12 +288,15 @@ def update_dependencies():
 
     #par['W_out_init'] = np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_hidden'], par['n_output']]))
     par['W_out_init'] = np.float32(np.random.uniform(-c, c, size = [par['n_hidden'], par['n_output']]))
-    #par['W_in_init'] = np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_input'], par['n_hidden']]))
-    #par['W_in_init'] = np.float32(np.random.uniform(-c, c, size = [par['n_input'], par['n_hidden']]))
-    par['W_in_init'] = np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_input'], par['n_hidden']]))
 
+    #par['W_in_init'] = np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_input'], par['n_hidden']]))
+    #par['W_in_init'] = np.float32(np.random.uniform(-0.25, 0.25, size = [par['n_input'], par['n_hidden']]))
+    par['W_in_init'] = c*np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_input'], par['n_hidden']]))
+    #par['W_d_in_init'] = np.float32(np.random.uniform(-c, c, size = [par['n_input'], par['n_d_hidden']]))
+    #par['W_in_init'][-par['num_rule_tuned']:, :] -= 0.5*np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['num_rule_tuned'], par['n_hidden']]))
 
     par['b_rnn_init'] = np.zeros((1,par['n_hidden']), dtype = np.float32)
+    par['b_d_rnn_init'] = np.zeros((1,par['n_d_hidden']), dtype = np.float32)
     par['b_out_init'] = np.zeros((1,par['n_output']), dtype = np.float32)
 
     par['W_out_mask'] = np.ones((par['n_hidden'], par['n_output']), dtype=np.float32)
@@ -271,11 +308,43 @@ def update_dependencies():
 
     # RL
     par['W_pol_out_init'] = np.float32(np.random.uniform(-c, c, size = [par['n_hidden'], par['n_pol']]))
-    par['W_val_out_init'] = np.float32(np.random.uniform(-c, c, size = [par['n_hidden'], par['n_val']]))
     par['b_pol_out_init'] = np.zeros((1,par['n_pol']), dtype = np.float32)
+    par['W_d_out_init'] = np.float32(np.random.uniform(-c, c, size = [par['n_d_hidden'], par['n_pol']]))
+    par['b_d_out_init'] = np.float32(np.random.uniform(-c, c, size = [1, par['n_pol']]))
+
+
+    par['W_val_out_init'] = np.float32(np.random.uniform(-c, c, size = [par['n_hidden'], par['n_val']]))
     par['b_val_out_init'] = np.zeros((1,par['n_val']), dtype = np.float32)
 
 
+    if par['LSTM']:
+        c = 0.05
+        par['Wf_init'] =  c*np.float32(np.random.uniform(-c, c, size = [par['n_input'], par['n_hidden']]))
+        par['Wi_init'] =  c*np.float32(np.random.uniform(-c, c, size = [par['n_input'], par['n_hidden']]))
+        par['Wo_init'] =  c*np.float32(np.random.uniform(-c, c, size = [par['n_input'], par['n_hidden']]))
+        par['Wc_init'] =  c*np.float32(np.random.uniform(-c, c, size = [par['n_input'], par['n_hidden']]))
+
+        par['Uf_init'] =  np.float32(np.random.uniform(-c, c, size = [par['n_hidden'], par['n_hidden']]))
+        par['Ui_init'] =  np.float32(np.random.uniform(-c, c, size = [par['n_hidden'], par['n_hidden']]))
+        par['Uo_init'] =  np.float32(np.random.uniform(-c, c, size = [par['n_hidden'], par['n_hidden']]))
+        par['Uc_init'] =  np.float32(np.random.uniform(-c, c, size = [par['n_hidden'], par['n_hidden']]))
+
+
+        par['bf_init'] = np.zeros((1, par['n_hidden']), dtype = np.float32)
+        par['bi_init'] = np.zeros((1, par['n_hidden']), dtype = np.float32)
+        par['bo_init'] = np.zeros((1, par['n_hidden']), dtype = np.float32)
+        par['bc_init'] = np.zeros((1, par['n_hidden']), dtype = np.float32)
+
+    """
+    par['W_val_out0_init'] = np.float32(np.random.uniform(-c, c, size = [par['n_hidden'], par['n_val_hidden']]))
+    #par['W_act_val_out0_init'] = np.float32(np.random.uniform(-c, c, size = [par['n_pol'], par['n_val_hidden']]))
+    par['b_val_out0_init'] = np.zeros((1, par['n_val_hidden']), dtype = np.float32)
+    par['W_val_out1_init'] = np.float32(np.random.uniform(-c, c, size = [par['n_val_hidden'], par['n_val_hidden']]))
+    par['b_val_out1_init'] = np.zeros((1, par['n_val_hidden']), dtype = np.float32)
+
+    par['W_val_out2_init'] = np.float32(np.random.uniform(-c, c, size = [par['n_val_hidden'], par['n_val']]))
+    par['b_val_out2_init'] = np.zeros((1,par['n_val']), dtype = np.float32)
+    """
 
     # Defining sublayers for the hidden layer
     n_per_sub = par['n_hidden']//par['num_sublayers']
@@ -331,13 +400,16 @@ def update_dependencies():
         k = 0
         # motion tuned only projects to sublayers[i][0:-1:3]
         #for i in chain(sublayers[k][1:-1:3], sublayers[k][2:-1:3]):
-        for i in sublayers[k][0:-1:6]:
-            par['W_in_init'][:par['num_motion_tuned'], i] = 0
-            par['W_in_mask'][:par['num_motion_tuned'], i] = 0
+        for i in chain(sublayers[k][0:-1:6], sublayers[k][1:-1:6], sublayers[k][2:-1:6]):
+            par['W_in_init'][:par['num_motion_tuned']//2, i] = 0
+            par['W_in_mask'][:par['num_motion_tuned']//2, i] = 0
+        for i in chain(sublayers[k][0:-1:6], sublayers[k][4:-1:6], sublayers[k][5:-1:6]):
+            par['W_in_init'][par['num_motion_tuned']//2:par['num_motion_tuned'], i] = 0
+            par['W_in_mask'][par['num_motion_tuned']//2:par['num_motion_tuned'], i] = 0
 
         # fixation tuned only prohject to sublayers[i][0:-1:3]
         for i in chain(sublayers[k][1:-1:6], sublayers[k][2:-1:6], sublayers[k][3:-1:6],\
-            sublayers[k][4:-1:6], sublayers[k][5:-1:6], sublayers[k][6:-1:6]):
+            sublayers[k][4:-1:6], sublayers[k][5:-1:6]):
             par['W_in_init'][par['num_motion_tuned']:par['num_motion_tuned']+par['num_fix_tuned'], i] = 0
             par['W_in_mask'][par['num_motion_tuned']:par['num_motion_tuned']+par['num_fix_tuned'], i] = 0
 
