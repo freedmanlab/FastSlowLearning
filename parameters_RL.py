@@ -21,8 +21,8 @@ par = {
     'reset_weights'         : False,    # reset weights between tasks
 
     # Network configuration
-    'synapse_config'        : 'std_stf',     # Full is 'std_stf'
-    'exc_inh_prop'          : 0.8,      # Literature 0.8, for EI off 1
+    'synapse_config'        : '',     # Full is 'std_stf'
+    'exc_inh_prop'          : 1,      # Literature 0.8, for EI off 1
     'var_delay'             : False,
     'LSTM'                  : True,
 
@@ -30,7 +30,7 @@ par = {
     'num_motion_tuned'      : 64,
     'num_fix_tuned'         : 4,
     'num_rule_tuned'        : 0,
-    'n_hidden'              : 256,
+    'n_hidden'              : 50,
     'n_d_hidden'            : 100, # distill hidden neurons
     'n_val_hidden'          : 200,
     'n_dendrites'           : 1, # don't use for now
@@ -58,7 +58,7 @@ par = {
 
     # Task specs
     'task'                  : 'multistim',
-    'n_tasks'               : 20,
+    'n_tasks'               : 1,
     'multistim_trial_length': 2000,
     'mask_duration'         : 0,
     'dead_time'             : 200,
@@ -90,7 +90,7 @@ par = {
     'EWC_fisher_num_batches': 16,   # number of batches when calculating EWC
 
     # Gating parameters
-    'gating_type'           : 'XdG', # 'XdG', 'partial', 'split', None
+    'gating_type'           : None, # 'XdG', 'partial', 'split', None
     'gate_pct'              : 0.8,  # Num. gated hidden units for 'XdG' only
     'n_subnetworks'         : 4,    # Num. subnetworks for 'split' only
 

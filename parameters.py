@@ -29,7 +29,7 @@ par = {
     # Network shape
     'num_motion_tuned'      : 64,
     'num_fix_tuned'         : 4,
-    'num_rule_tuned'        : 20,
+    'num_rule_tuned'        : 0,
     'n_hidden'              : 256,
     'n_dendrites'           : 1, # don't use for now
     'n_val'                 : 1,
@@ -87,7 +87,7 @@ par = {
     'include_val_stab'      : 1., # 1. or 0.
 
     # Gating parameters
-    'gating_type'           : 'XdG', # 'XdG', 'partial', 'split', None
+    'gating_type'           : None, # 'XdG', 'partial', 'split', None
     'gate_pct'              : 0.75,  # Num. gated hidden units for 'XdG' only
     'n_subnetworks'         : 4,    # Num. subnetworks for 'split' only
 

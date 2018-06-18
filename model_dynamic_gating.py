@@ -4,7 +4,7 @@ import tensorflow as tf
 import numpy as np
 import stimulus
 import AdamOpt
-from parameters import *
+from parameters_RL import *
 import os, time
 import pickle
 import convolutional_layers
