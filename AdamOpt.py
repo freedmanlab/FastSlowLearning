@@ -79,8 +79,14 @@ class AdamOpt:
             if 'W_rnn' in var.op.name:
                 print('Applied W_rnn mask.')
                 delta_grad *= par['W_rnn_mask']
+            elif 'W_in2' in var.op.name:
+                print('Applied W_in_slow mask on', var.op.name)
+                delta_grad *= par['W_in_mask_slow']
+            elif 'W_in3' in var.op.name:
+                print('Applied W_in_slow mask on', var.op.name)
+                delta_grad *= par['W_in_mask_slow']
             elif 'W_in' in var.op.name:
-                print('Applied W_in mask.')
+                print('Applied W_in mask on', var.op.name)
                 delta_grad *= par['W_in_mask']
             elif 'W_d_rnn' in var.op.name:
                 print('Applied W_d_rnn mask.')
