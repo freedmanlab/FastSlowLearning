@@ -169,7 +169,7 @@ class Model:
         self.spike_loss1 = par['spike_cost']*tf.reduce_mean(tf.square(self.hidden_state_hist1))
         self.spike_loss2 = par['spike_cost']*tf.reduce_mean(tf.square(self.hidden_state_hist2))
         self.spike_loss3 = par['spike_cost']*tf.reduce_mean(tf.square(self.hidden_state_hist3))
-
+        self.spike_loss = (self.spike_loss1 + self.spike_loss2 + self.spike_loss3)/3
 
 
         self.task_loss = tf.reduce_mean([mask*tf.nn.softmax_cross_entropy_with_logits(logits = y, \
@@ -190,8 +190,8 @@ class Model:
         self.weight_loss = par['weight_cost']*(tf.reduce_mean(active_weights_in*W_in**2) + tf.reduce_mean(tf.nn.relu(active_weights_rnn*W_rnn)**2))
         """
         # Gradient of the loss+aux function, in order to both perform training and to compute delta_weights
-        with tf.control_dependencies([self.task_loss, self.aux_loss, self.spike_loss1, self.spike_loss2,self.spike_loss3,self.entropy_loss ]):
-            self.train_op = adam_optimizer.compute_gradients(self.task_loss + self.aux_loss + self.spike_loss1 + self.spike_loss2 + self.spike_loss3 - self.entropy_loss)
+        with tf.control_dependencies([self.task_loss, self.aux_loss, self.spike_loss, self.entropy_loss ]):
+            self.train_op = adam_optimizer.compute_gradients(self.task_loss + self.aux_loss + self.spike_loss - self.entropy_loss)
 
         # Stabilizing weights
         if par['stabilization'] == 'pathint':
@@ -349,9 +349,9 @@ def main(save_fn=None, gpu_id = None):
                 name, stim_in, y_hat, mk, _ = stim.generate_trial(task)
 
                 if par['stabilization'] == 'pathint':
-                    _, _, loss, AL, spike_loss1, spike_loss2, spike_loss3, ent_loss, output = sess.run([model.train_op, \
-                        model.update_small_omega, model.task_loss, model.aux_loss, model.spike_loss1, \
-                        model.spike_loss2, model.spike_loss3, model.entropy_loss, model.output], \
+                    _, _, loss, AL, spike_loss, ent_loss, output = sess.run([model.train_op, \
+                        model.update_small_omega, model.task_loss, model.aux_loss, model.spike_loss, \
+                        model.entropy_loss, model.output], \
                         feed_dict = {x:stim_in, target:y_hat, gating:par['gating'][task], mask:mk})
                     sess.run([model.reset_rnn_weights])
                     if loss < 0.005 and AL < 0.0004 + 0.0002*task:
@@ -363,7 +363,7 @@ def main(save_fn=None, gpu_id = None):
 
                 if i%100 == 0:
                     acc = get_perf(y_hat, output, mk)
-                    print('Iter ', i, 'Task name ', name, ' accuracy', acc, ' loss ', loss, ' aux loss', AL, ' spike loss', spike_loss3, \
+                    print('Iter ', i, 'Task name ', name, ' accuracy', acc, ' loss ', loss, ' aux loss', AL, ' spike loss', spike_loss, \
                         ' entropy loss', ent_loss)
 
 
