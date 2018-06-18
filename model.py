@@ -45,23 +45,45 @@ class Model:
     def run_model(self):
 
         with tf.variable_scope('rnn'):
-            W_in  = tf.get_variable('W_in', initializer=par['W_in_init'], trainable=True)
-            W_rnn = tf.get_variable('W_rnn', initializer=par['W_rnn_init'], trainable=True)
-            b_rnn = tf.get_variable('b_rnn', initializer=par['b_rnn_init'], trainable=True)
+            # First RNN layer
+            W_in1  = tf.get_variable('W_in1', initializer=par['W_in_init1'], trainable=True)
+            W_rnn1 = tf.get_variable('W_rnn1', initializer=par['W_rnn_init1'], trainable=True)
+            b_rnn1 = tf.get_variable('b_rnn1', initializer=par['b_rnn_init1'], trainable=True)
+
+            # Second RNN layer
+            W_in2  = tf.get_variable('W_in2', initializer=par['W_in_init2'], trainable=True)
+            W_rnn2 = tf.get_variable('W_rnn2', initializer=par['W_rnn_init2'], trainable=True)
+            b_rnn2 = tf.get_variable('b_rnn2', initializer=par['b_rnn_init2'], trainable=True)
+
+            # Third RNN layer
+            W_in3  = tf.get_variable('W_in3', initializer=par['W_in_init3'], trainable=True)
+            W_rnn3 = tf.get_variable('W_rnn3', initializer=par['W_rnn_init3'], trainable=True)
+            b_rnn3 = tf.get_variable('b_rnn3', initializer=par['b_rnn_init3'], trainable=True)
 
         with tf.variable_scope('output'):
-            W_out = tf.get_variable('W_out', initializer=par['W_out_init'], trainable=True)
-            b_out = tf.get_variable('b_out', initializer=par['b_out_init'], trainable=True)
+            # First RNN layer
+            W_out1 = tf.get_variable('W_out1', initializer=par['W_out_init1'], trainable=True)
+            b_out1 = tf.get_variable('b_out1', initializer=par['b_out_init1'], trainable=True)
+
+            # Second RNN layer
+            W_out2 = tf.get_variable('W_out2', initializer=par['W_out_init2'], trainable=True)
+            b_out2 = tf.get_variable('b_out2', initializer=par['b_out_init2'], trainable=True)
+
+            # Third RNN layer
+            W_out3 = tf.get_variable('W_out3', initializer=par['W_out_init3'], trainable=True)
+            b_out3 = tf.get_variable('b_out3', initializer=par['b_out_init3'], trainable=True)
 
         if par['EI']:
             W_rnn = tf.matmul(self.W_ei, tf.nn.relu(W_rnn))
 
 
-        h = tf.constant(par['h_init'])
+        h1 = tf.constant(par['h1_init'])
+        h2 = tf.constant(par['h2_init'])
+        h3 = tf.constant(par['h3_init'])
         syn_x = tf.constant(par['syn_x_init'])
         syn_u = tf.constant(par['syn_u_init'])
         for x in self.input_data:
-
+            '''
             if par['synapse_config'] == 'std_stf':
                 # implement both synaptic short term facilitation and depression
                 syn_x += par['alpha_std']*(1-syn_x) - par['dt_sec']*syn_u*syn_x*h
@@ -88,25 +110,38 @@ class Model:
             else:
                 # no synaptic plasticity
                 h_post = h
-
+            '''
 
 
             # Hidden State
-            h = self.gating*tf.nn.relu((1-par['alpha_neuron'])*h + par['alpha_neuron']*(tf.matmul(x, W_in) + \
-                tf.matmul(h_post, W_rnn) + b_rnn) + tf.random_normal(h.shape, 0, par['noise_rnn'], dtype=tf.float32))
+            h1 = self.gating*tf.nn.relu((1-par['alpha_neuron'])*h1 + par['alpha_neuron']*(tf.matmul(x, W_in1) + \
+                tf.matmul(h1, W_rnn1) + b_rnn1) + tf.random_normal(h1.shape, 0, par['noise_rnn'], dtype=tf.float32))
 
             #h = tf.minimum(50., h)
 
             # Output State
-            y = tf.matmul(h, W_out) + b_out
+            y1 = tf.matmul(h1, W_out1) + b_out1
+
+
+            h2 = self.gating*tf.nn.relu((1-par['alpha_neuron'])*h2 + par['alpha_neuron']*(tf.matmul(y1, W_in2) + \
+                tf.matmul(h2, W_rnn2) + b_rnn2) + tf.random_normal(h2.shape, 0, par['noise_rnn'], dtype=tf.float32))
+
+            y2 = tf.matmul(h2, W_out2) + b_out2
+
+            h3 = self.gating*tf.nn.relu((1-par['alpha_neuron'])*h3 + par['alpha_neuron']*(tf.matmul(y2, W_in3) + \
+                tf.matmul(h3, W_rnn3) + b_rnn3) + tf.random_normal(h3.shape, 0, par['noise_rnn'], dtype=tf.float32))
+
+            y3 = tf.matmul(h3, W_out3) + b_out3
+
 
             # Bookkeeping lists
-            self.hidden_state_hist.append(h)
+            self.hidden_state_hist1.append(h1)
+            self.hidden_state_hist2.append(h2)
+            self.hidden_state_hist3.append(h3)
             self.syn_x_hist.append(syn_x)
             self.syn_u_hist.append(syn_u)
-            self.output.append(y)
 
-
+            self.output.append(y3)
 
     def optimize(self):
 
