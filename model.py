@@ -155,7 +155,7 @@ class Model:
             self.syn_x_hist.append(syn_x)
             self.syn_u_hist.append(syn_u)
 
-            self.output.append(y[par['num_layers_slow']-1])
+            self.output.append(ys[par['num_layers_slow']-1])
 
     def optimize(self):
 
@@ -182,6 +182,8 @@ class Model:
             self.spike_losses.append(par['spike_cost']*tf.reduce_mean(tf.square(self.hidden_state_hists[i])))
 
 
+        self.spike_loss_slow = sum(self.spike_losses)/par['num_layers_slow']
+
 
 
         self.task_loss = tf.reduce_mean([mask*tf.nn.softmax_cross_entropy_with_logits(logits = y, \
@@ -202,8 +204,8 @@ class Model:
         self.weight_loss = par['weight_cost']*(tf.reduce_mean(active_weights_in*W_in**2) + tf.reduce_mean(tf.nn.relu(active_weights_rnn*W_rnn)**2))
         """
         # Gradient of the loss+aux function, in order to both perform training and to compute delta_weights
-        with tf.control_dependencies([self.task_loss, self.aux_loss, self.spike_losses,self.entropy_loss ]):
-            self.train_op = adam_optimizer.compute_gradients(self.task_loss + self.aux_loss + self.spike_losses.mean() - self.entropy_loss)
+        with tf.control_dependencies([self.task_loss, self.aux_loss, self.spike_loss_slow,self.entropy_loss ]):
+            self.train_op = adam_optimizer.compute_gradients(self.task_loss + self.aux_loss + self.spike_loss_slow - self.entropy_loss)
 
         # Stabilizing weights
         if par['stabilization'] == 'pathint':
@@ -361,8 +363,8 @@ def main(save_fn=None, gpu_id = None):
                 name, stim_in, y_hat, mk, _ = stim.generate_trial(task)
 
                 if par['stabilization'] == 'pathint':
-                    _, _, loss, AL, spike_loss, ent_loss, output = sess.run([model.train_op, \
-                        model.update_small_omega, model.task_loss, model.aux_loss, model.spike_loss, \
+                    _, _, loss, AL, spike_loss_slow, ent_loss, output = sess.run([model.train_op, \
+                        model.update_small_omega, model.task_loss, model.aux_loss, model.spike_loss_slow, \
                         model.entropy_loss, model.output], \
                         feed_dict = {x:stim_in, target:y_hat, gating:par['gating'][task], mask:mk})
                     sess.run([model.reset_rnn_weights])
@@ -375,7 +377,7 @@ def main(save_fn=None, gpu_id = None):
 
                 if i%100 == 0:
                     acc = get_perf(y_hat, output, mk)
-                    print('Iter ', i, 'Task name ', name, ' accuracy', acc, ' loss ', loss, ' aux loss', AL, ' spike loss', spike_loss, \
+                    print('Iter ', i, 'Task name ', name, ' accuracy', acc, ' loss ', loss, ' aux loss', AL, ' spike loss', spike_loss_slow, \
                         ' entropy loss', ent_loss)
 
 
