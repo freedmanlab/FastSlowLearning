@@ -76,30 +76,22 @@ class AdamOpt:
             #self.update_var_op.append(tf.assign(self.delta_grads[var.op.name], delta_grad))
             self.update_var_op.append(tf.assign(self.delta_grads[var.op.name], delta_grad))
 
-            if 'W_rnn' in var.op.name:
-                print('Applied W_rnn mask.')
-                delta_grad *= par['W_rnn_mask']
-            elif 'W_in2' in var.op.name:
-                print('Applied W_in_slow mask on', var.op.name)
-                delta_grad *= par['W_in_mask2']
-            elif 'W_in3' in var.op.name:
-                print('Applied W_in_slow mask on', var.op.name)
-                delta_grad *= par['W_in_mask3']
-            elif 'W_in' in var.op.name:
-                print('Applied W_in mask on', var.op.name)
-                delta_grad *= par['W_in_mask']
-            elif 'W_d_rnn' in var.op.name:
+
+            for i in range(par['num_layers_slow']):
+                if 'W_rnn'+str(i+1) in var.op.name:
+                    print('Applied W_rnn mask.')
+                    delta_grad *= par['W_rnn_mask']
+                elif 'W_in'+str(i+1) in var.op.name:
+                    print('Applied W_in_slow mask.')
+                    delta_grad *= par['W_in_masks'][i]
+                elif 'W_out'+str(i+1) in var.op.name:
+                    print('Applied W_out mask.')
+                    delta_grad *= par['W_out_masks'][i]
+
+            if 'W_d_rnn' in var.op.name:
                 print('Applied W_d_rnn mask.')
                 delta_grad *= par['W_d_rnn_mask']
-            elif 'W_out1' in var.op.name:
-                print('Applied W_out mask.')
-                delta_grad *= par['W_out_mask1']
-            elif 'W_out2' in var.op.name:
-                print('Applied W_out mask.')
-                delta_grad *= par['W_out_mask2']
-            elif 'W_out3' in var.op.name:
-                print('Applied W_out mask.')
-                delta_grad *= par['W_out_mask3']
+
             self.update_var_op.append(tf.assign_add(var, delta_grad))
 
         return tf.group(*self.update_var_op)

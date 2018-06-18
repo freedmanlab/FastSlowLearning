@@ -33,9 +33,8 @@ class Model:
 
         # Build the TensorFlow graph
         self.hidden_state_hist = []
-        self.hidden_state_hist1 = []
-        self.hidden_state_hist2 = []
-        self.hidden_state_hist3 = []
+        self.hidden_state_hists = []
+
         self.syn_x_hist = []
         self.syn_u_hist = []
         self.output = []
@@ -48,6 +47,14 @@ class Model:
     def run_model(self):
 
         with tf.variable_scope('rnn'):
+            W_ins = []
+            W_rnns = []
+            b_rnns = []
+            for i in range(par['num_layers_slow']):
+                W_ins.append(tf.get_variable('W_in'+str(i+1),initializer=par['W_in_inits'][i], trainable=True))
+                W_rnns.append(tf.get_variable('W_rnn'+str(i+1),initializer=par['W_rnn_inits'][i], trainable=True))
+                b_rnns.append(tf.get_variable('b_rnn'+str(i+1),initializer=par['b_rnn_inits'][i], trainable=True))
+            '''
             # First RNN layer
             W_in1  = tf.get_variable('W_in1', initializer=par['W_in_init1'], trainable=True)
             W_rnn1 = tf.get_variable('W_rnn1', initializer=par['W_rnn_init1'], trainable=True)
@@ -62,8 +69,16 @@ class Model:
             W_in3  = tf.get_variable('W_in3', initializer=par['W_in_init3'], trainable=True)
             W_rnn3 = tf.get_variable('W_rnn3', initializer=par['W_rnn_init3'], trainable=True)
             b_rnn3 = tf.get_variable('b_rnn3', initializer=par['b_rnn_init3'], trainable=True)
+            '''
 
         with tf.variable_scope('output'):
+            W_outs = []
+            b_outs = []
+
+            for i in range(par['num_layers_slow']):
+                W_outs.append(tf.get_variable('W_out'+str(i+1),initializer=par['W_out_inits'][i], trainable=True))
+                b_outs.append(tf.get_variable('b_out'+str(i+1),initializer=par['b_out_inits'][i], trainable=True))
+            '''
             # First RNN layer
             W_out1 = tf.get_variable('W_out1', initializer=par['W_out_init1'], trainable=True)
             b_out1 = tf.get_variable('b_out1', initializer=par['b_out_init1'], trainable=True)
@@ -75,14 +90,17 @@ class Model:
             # Third RNN layer
             W_out3 = tf.get_variable('W_out3', initializer=par['W_out_init3'], trainable=True)
             b_out3 = tf.get_variable('b_out3', initializer=par['b_out_init3'], trainable=True)
+            '''
 
         if par['EI']:
             W_rnn = tf.matmul(self.W_ei, tf.nn.relu(W_rnn))
 
+        hs = []
+        for i in range(par['num_layers_slow']):
+            hs.append(tf.constant(par['h_inits'][i]))
 
-        h1 = tf.constant(par['h1_init'])
-        h2 = tf.constant(par['h2_init'])
-        h3 = tf.constant(par['h3_init'])
+        ys = [0]*par['num_layers_slow']
+
         syn_x = tf.constant(par['syn_x_init'])
         syn_u = tf.constant(par['syn_u_init'])
         for x in self.input_data:
@@ -117,34 +135,27 @@ class Model:
 
 
             # Hidden State
-            h1 = self.gating*tf.nn.relu((1-par['alpha_neuron'])*h1 + par['alpha_neuron']*(tf.matmul(x, W_in1) + \
-                tf.matmul(h1, W_rnn1) + b_rnn1) + tf.random_normal(h1.shape, 0, par['noise_rnn'], dtype=tf.float32))
+            hs[0] = self.gating*tf.nn.relu((1-par['alpha_neuron'])*hs[0] + par['alpha_neuron']*(tf.matmul(x, W_ins[0]) + \
+                tf.matmul(hs[0], W_rnns[0]) + b_rnns[0]) + tf.random_normal(hs[0].shape, 0, par['noise_rnn'], dtype=tf.float32))
+            # Output State
+            ys[0] = tf.matmul(hs[0], W_outs[0]) + b_outs[0]
+
+            for i in range(1,par['num_layers_slow']):
+                # Hidden State
+                hs[i] = self.gating*tf.nn.relu((1-par['alpha_neuron'])*hs[i] + par['alpha_neuron']*(tf.matmul(ys[i-1], W_ins[i]) + \
+                    tf.matmul(hs[i], W_rnns[i]) + b_rnns[i]) + tf.random_normal(hs[i].shape, 0, par['noise_rnn'], dtype=tf.float32))
+                # Output State
+                ys[i] = tf.matmul(hs[i], W_outs[i]) + b_outs[i]
 
             #h = tf.minimum(50., h)
 
-            # Output State
-            y1 = tf.matmul(h1, W_out1) + b_out1
-
-
-            h2 = self.gating*tf.nn.relu((1-par['alpha_neuron'])*h2 + par['alpha_neuron']*(tf.matmul(y1, W_in2) + \
-                tf.matmul(h2, W_rnn2) + b_rnn2) + tf.random_normal(h2.shape, 0, par['noise_rnn'], dtype=tf.float32))
-
-            y2 = tf.matmul(h2, W_out2) + b_out2
-
-            h3 = self.gating*tf.nn.relu((1-par['alpha_neuron'])*h3 + par['alpha_neuron']*(tf.matmul(y2, W_in3) + \
-                tf.matmul(h3, W_rnn3) + b_rnn3) + tf.random_normal(h3.shape, 0, par['noise_rnn'], dtype=tf.float32))
-
-            y3 = tf.matmul(h3, W_out3) + b_out3
-
 
             # Bookkeeping lists
-            self.hidden_state_hist1.append(h1)
-            self.hidden_state_hist2.append(h2)
-            self.hidden_state_hist3.append(h3)
+            self.hidden_state_hists.append(hs)
             self.syn_x_hist.append(syn_x)
             self.syn_u_hist.append(syn_u)
 
-            self.output.append(y3)
+            self.output.append(y[par['num_layers_slow']-1])
 
     def optimize(self):
 
@@ -166,9 +177,10 @@ class Model:
 
         self.aux_loss = tf.add_n(aux_losses)
 
-        self.spike_loss1 = par['spike_cost']*tf.reduce_mean(tf.square(self.hidden_state_hist1))
-        self.spike_loss2 = par['spike_cost']*tf.reduce_mean(tf.square(self.hidden_state_hist2))
-        self.spike_loss3 = par['spike_cost']*tf.reduce_mean(tf.square(self.hidden_state_hist3))
+        self.spike_losses = []
+        for i in range(par['num_layers_slow']):
+            self.spike_losses.append(par['spike_cost']*tf.reduce_mean(tf.square(self.hidden_state_hists[i])))
+
 
 
 
@@ -190,8 +202,8 @@ class Model:
         self.weight_loss = par['weight_cost']*(tf.reduce_mean(active_weights_in*W_in**2) + tf.reduce_mean(tf.nn.relu(active_weights_rnn*W_rnn)**2))
         """
         # Gradient of the loss+aux function, in order to both perform training and to compute delta_weights
-        with tf.control_dependencies([self.task_loss, self.aux_loss, self.spike_loss1, self.spike_loss2,self.spike_loss3,self.entropy_loss ]):
-            self.train_op = adam_optimizer.compute_gradients(self.task_loss + self.aux_loss + self.spike_loss1 + self.spike_loss2 + self.spike_loss3 - self.entropy_loss)
+        with tf.control_dependencies([self.task_loss, self.aux_loss, self.spike_losses,self.entropy_loss ]):
+            self.train_op = adam_optimizer.compute_gradients(self.task_loss + self.aux_loss + self.spike_losses.mean() - self.entropy_loss)
 
         # Stabilizing weights
         if par['stabilization'] == 'pathint':
