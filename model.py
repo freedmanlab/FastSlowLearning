@@ -361,9 +361,9 @@ def main(save_fn=None, gpu_id = None):
                 name, stim_in, y_hat, mk, _ = stim.generate_trial(task)
 
                 if par['stabilization'] == 'pathint':
-                    _, _, loss, AL, spike_loss1, spike_loss2, spike_loss3, ent_loss, output = sess.run([model.train_op, \
-                        model.update_small_omega, model.task_loss, model.aux_loss, model.spike_loss1, \
-                        model.spike_loss2, model.spike_loss3, model.entropy_loss, model.output], \
+                    _, _, loss, AL, spike_loss, ent_loss, output = sess.run([model.train_op, \
+                        model.update_small_omega, model.task_loss, model.aux_loss, model.spike_loss, \
+                        model.entropy_loss, model.output], \
                         feed_dict = {x:stim_in, target:y_hat, gating:par['gating'][task], mask:mk})
                     sess.run([model.reset_rnn_weights])
                     if loss < 0.005 and AL < 0.0004 + 0.0002*task:
@@ -375,7 +375,7 @@ def main(save_fn=None, gpu_id = None):
 
                 if i%100 == 0:
                     acc = get_perf(y_hat, output, mk)
-                    print('Iter ', i, 'Task name ', name, ' accuracy', acc, ' loss ', loss, ' aux loss', AL, ' spike loss', spike_loss3, \
+                    print('Iter ', i, 'Task name ', name, ' accuracy', acc, ' loss ', loss, ' aux loss', AL, ' spike loss', spike_loss, \
                         ' entropy loss', ent_loss)
 
 
