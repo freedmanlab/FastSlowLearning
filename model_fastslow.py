@@ -789,12 +789,13 @@ def get_perf(target, output, mask):
     only examine time points when test stimulus is on
     in another words, when target[:,:,-1] is not 0
     """
+
     output = np.stack(output, axis=0)
-    mk = mask*np.reshape(target[:,:,-1] == 0, (par['batch_size'], par['num_time_steps'], 1))
+    mk = mask*(target[:,:,-1] == 0)
 
     target = np.argmax(target, axis = 2)
     output = np.argmax(output, axis = 2)
 
-    return np.sum(np.float32(target == output)*np.squeeze(mk))/np.sum(mk)
+    return np.sum(np.float32(target == output)*mk)/np.sum(mk)
 
 #main('testing')

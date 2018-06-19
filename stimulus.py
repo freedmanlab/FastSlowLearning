@@ -216,9 +216,9 @@ class MultiStimulus:
             neuron_ind = range(self.modality_size*modality, self.modality_size*(1+modality))
 
             if training:
-                stim_dir = np.random.choice(self.motion_dirs[6:])
+                stim_dir = np.random.choice(self.motion_dirs[1:])
             else:
-                stim_dir   = np.random.choice(self.motion_dirs[0:6])
+                stim_dir   = np.random.choice(self.motion_dirs)
             target_ind = int(np.round(par['num_motion_dirs']*(stim_dir+offset)/(2*np.pi))%par['num_motion_dirs'])
 
             self.trial_info['neural_input'][stim_onset[b]:stim_off, b, neuron_ind] += np.reshape(self.circ_tuning(stim_dir),(1,-1))
