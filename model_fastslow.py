@@ -614,9 +614,15 @@ def main(save_fn=None, gpu_id = None):
                     _, loss, AL = sess.run([model.train_op, model.task_loss, model.aux_loss], feed_dict = \
                         {x:stim_in, target:y_hat, gating:par['gating'][task], mask:mk})
 
+                else:
+                     _, loss, spike_loss, ent_loss, fast_output = sess.run([model.train_op, \
+                        model.task_loss, model.spike_loss, \
+                        model.entropy_loss, model.output], \
+                        feed_dict = {x:stim_in, target:y_hat, gating:par['gating'][task], mask:mk})
+
                 if i%100 == 0:
                     acc = get_perf(y_hat, fast_output, mk)
-                    print('Iter ', i, 'Task name ', name, ' accuracy', acc, ' loss ', loss, ' aux loss', AL, ' spike loss', spike_loss, \
+                    print('Iter ', i, 'Task name ', name, ' accuracy', acc, ' loss ', loss, ' spike loss', spike_loss, \
                         ' entropy loss', ent_loss)
 
 
@@ -644,8 +650,6 @@ def main(save_fn=None, gpu_id = None):
                     big_omegas = sess.run([model.update_big_omega,model.big_omega_var], feed_dict = \
                         {x:stim_in, target:y_hat, gating:par['gating'][task], mask:mk})
 
-
-
             # Reset the Adam Optimizer, and set the previous parater values to their current values
             sess.run(model.reset_adam_op)
             sess.run(model.reset_prev_vars)
@@ -665,8 +669,6 @@ def main(save_fn=None, gpu_id = None):
             pickle.dump(save_results, open(par['save_dir'] + save_fn, 'wb'))
 
     print('\nFast Model execution complete.')
-    if fast_output is None:
-        print("FAST OUTPUT STILL NONE")
 
     # Slow network session
     with tf.Session(config=config) as sess:
@@ -699,9 +701,15 @@ def main(save_fn=None, gpu_id = None):
                     _, loss, AL = sess.run([model.train_op, model.task_loss, model.aux_loss], feed_dict = \
                         {x:stim_in, target:fast_output, gating:par['gating'][task], mask:mk})
 
+                else:
+                     _, loss, spike_loss_slow, ent_loss, output = sess.run([model.train_op, \
+                        model.task_loss, model.spike_loss_slow, \
+                        model.entropy_loss, model.output], \
+                        feed_dict = {x:stim_in, target:fast_output, gating:par['gating'][task], mask:mk})
+
                 if i%100 == 0:
                     acc = get_perf(y_hat, output, mk)
-                    print('Iter ', i, 'Task name ', name, ' accuracy', acc, ' loss ', loss, ' aux loss', AL, ' spike loss', spike_loss_slow, \
+                    print('Iter ', i, 'Task name ', name, ' accuracy', acc, ' loss ', loss,  'spike loss', spike_loss_slow, \
                         ' entropy loss', ent_loss)
 
 

@@ -9,7 +9,7 @@ def try_model(save_fn,gpu_id):
 
     try:
         # Run model
-        model.main(save_fn, gpu_id)
+        model_fastslow.main(save_fn, gpu_id)
     except KeyboardInterrupt:
         quit('Quit by KeyboardInterrupt')
 

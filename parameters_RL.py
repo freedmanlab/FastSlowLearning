@@ -16,7 +16,7 @@ global par
 par = {
     # General parameters
     'save_dir'              : './savedir/',
-    'stabilization'         : 'pathint', # 'EWC' (Kirkpatrick method) or 'pathint' (Zenke method)
+    'stabilization'         : None, # 'EWC' (Kirkpatrick method) or 'pathint' (Zenke method)
     'save_analysis'         : False,
     'reset_weights'         : False,    # reset weights between tasks
 
@@ -87,7 +87,7 @@ par = {
 
     # Training specs
     'batch_size'            : 256,
-    'n_train_batches'       : 300,
+    'n_train_batches'       : 100,
     'n_train_batches_slow'  : 50000,
 
     # Omega parameters
