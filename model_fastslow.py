@@ -621,7 +621,7 @@ def main(save_fn=None, gpu_id = None):
                         model.entropy_loss, model.output], \
                         feed_dict = {x:stim_in, target:y_hat, gating:par['gating'][task], mask:mk})
 
-                if i%100 == 0:
+                if i%10 == 0:
                     acc = get_perf(y_hat, fast_output, mk)
                     print('Iter ', i, 'Task name ', name, ' accuracy', acc, ' loss ', loss, ' spike loss', spike_loss, \
                         ' entropy loss', ent_loss)
@@ -632,6 +632,7 @@ def main(save_fn=None, gpu_id = None):
             for (task_prime, r) in product(range(task+1), range(num_reps)):
 
                 # make batch of training data
+                par['training'] = False
                 name, stim_in, y_hat, mk, _ = stim.generate_trial(task_prime)
 
                 fast_output,_ = sess.run([model.output, model.syn_x_hist], feed_dict = {x:stim_in, gating:par['gating'][task_prime]})
@@ -680,6 +681,7 @@ def main(save_fn=None, gpu_id = None):
             for i in range(par['n_train_batches_slow']):
 
                 # make batch of training data
+                par['training'] = True
                 name, stim_in, y_hat, mk, _ = stim.generate_trial(task)
 
                 if par['distillation']:
@@ -744,6 +746,7 @@ def main(save_fn=None, gpu_id = None):
             for (task_prime, r) in product(range(task+1), range(num_reps)):
 
                 # make batch of training data
+                par['training'] = False
                 name, stim_in, y_hat, mk, _ = stim.generate_trial(task_prime)
 
                 output,_ = sess.run([slow_model.output, slow_model.syn_x_hist], feed_dict = {x:stim_in, gating:par['gating'][task_prime]})

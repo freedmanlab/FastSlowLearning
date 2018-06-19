@@ -214,7 +214,16 @@ class MultiStimulus:
             """
             modality   = np.random.randint(2)
             neuron_ind = range(self.modality_size*modality, self.modality_size*(1+modality))
-            stim_dir   = np.random.choice(self.motion_dirs)
+            if par['training']:
+                print("Training")
+                stim_dir = np.random.choice(self.motion_dirs - 1)
+                if stim_dir == 7:
+                    print("This shouldn't be happening??")
+            else:
+                print("Testing")
+                stim_dir   = np.random.choice(self.motion_dirs)
+                if stim_dir == 7:
+                    print("New stimulus!!")
             target_ind = int(np.round(par['num_motion_dirs']*(stim_dir+offset)/(2*np.pi))%par['num_motion_dirs'])
 
             self.trial_info['neural_input'][stim_onset[b]:stim_off, b, neuron_ind] += np.reshape(self.circ_tuning(stim_dir),(1,-1))

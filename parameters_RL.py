@@ -40,6 +40,7 @@ par = {
     # SLOW network
     'SLOW'                  : True,
     'distillation'          : True,
+    'training'              : True,
     'num_layers_slow'       : 3,
     'n_outputs'             : [],
 
