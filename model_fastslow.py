@@ -580,15 +580,13 @@ def main(save_fn=None, gpu_id = None):
     config = tf.ConfigProto()
     #config.gpu_options.allow_growth = True
 
-    # Store the fast output
-    fast_output = None
-
     # Fast Model run session
     with tf.Session(config=config) as sess:
 
         device = '/cpu:0' if gpu_id is None else '/gpu:0'
         with tf.device(device):
             model = Fast_Model(x, target, gating, mask)
+            slow_model = Slow_Model(x, target, gating, mask)
 
         sess.run(tf.global_variables_initializer())
         t_start = time.time()
@@ -668,18 +666,11 @@ def main(save_fn=None, gpu_id = None):
                             'accuracy_grid': accuracy_grid, 'big_omegas': big_omegas, 'par': par}
             pickle.dump(save_results, open(par['save_dir'] + save_fn, 'wb'))
 
-    print('\nFast Model execution complete.')
+        print('\nFast Model execution complete.')
 
-    # Slow network session
-    with tf.Session(config=config) as sess:
-
-        device = '/cpu:0' if gpu_id is None else '/gpu:0'
-        with tf.device(device):
-            model = Slow_Model(x, target, gating, mask)
-
-        sess.run(tf.global_variables_initializer())
-        t_start = time.time()
-        sess.run(model.reset_prev_vars)
+        # Slow network session
+        # sess.run(tf.global_variables_initializer())
+        sess.run(slow_model.reset_prev_vars)
 
         for task in range(0,par['n_tasks']):
 
@@ -688,28 +679,34 @@ def main(save_fn=None, gpu_id = None):
                 # make batch of training data
                 name, stim_in, y_hat, mk, _ = stim.generate_trial(task)
 
+                # getting fast output from the trained fast network
+                fast_output,_ = sess.run([model.output, model.syn_x_hist], feed_dict = {x:stim_in, gating:par['gating'][task_prime]})
+                print(len(y_hat))
+                print(len(fast_output))
+
                 if par['stabilization'] == 'pathint':
-                    _, _, loss, AL, spike_loss_slow, ent_loss, output = sess.run([model.train_op, \
-                        model.update_small_omega, model.task_loss, model.aux_loss, model.spike_loss_slow, \
-                        model.entropy_loss, model.output], \
+                    _, _, loss, AL, spike_loss_slow, ent_loss, output = sess.run([slow_model.train_op, \
+                        slow_model.update_small_omega, slow_model.task_loss, slow_model.aux_loss, slow_model.spike_loss_slow, \
+                        slow_model.entropy_loss, slow_model.output], \
                         feed_dict = {x:stim_in, target:fast_output, gating:par['gating'][task], mask:mk})
-                    sess.run([model.reset_rnn_weights])
+                    sess.run([slow_model.reset_rnn_weights])
                     if loss < 0.005 and AL < 0.0004 + 0.0002*task:
                         break
 
                 elif par['stabilization'] == 'EWC':
-                    _, loss, AL = sess.run([model.train_op, model.task_loss, model.aux_loss], feed_dict = \
+                    _, loss, AL = sess.run([slow_model.train_op, slow_model.task_loss, slow_model.aux_loss], feed_dict = \
                         {x:stim_in, target:fast_output, gating:par['gating'][task], mask:mk})
 
                 else:
-                     _, loss, spike_loss_slow, ent_loss, output = sess.run([model.train_op, \
-                        model.task_loss, model.spike_loss_slow, \
-                        model.entropy_loss, model.output], \
+                     _, loss, spike_loss_slow, ent_loss, output = sess.run([slow_model.train_op, \
+                        slow_model.task_loss, slow_model.spike_loss_slow, \
+                        slow_model.entropy_loss, slow_model.output], \
                         feed_dict = {x:stim_in, target:fast_output, gating:par['gating'][task], mask:mk})
 
                 if i%100 == 0:
+                    fast_acc = get_perf(y_hat, fast_output, mk)
                     acc = get_perf(y_hat, output, mk)
-                    print('Iter ', i, 'Task name ', name, ' accuracy', acc, ' loss ', loss,  'spike loss', spike_loss_slow, \
+                    print('Iter ', i, 'Task name ', name, ' fast_acc', fast_acc, ' accuracy', acc, ' loss ', loss,  'spike loss', spike_loss_slow, \
                         ' entropy loss', ent_loss)
 
 
@@ -720,7 +717,7 @@ def main(save_fn=None, gpu_id = None):
                 # make batch of training data
                 name, stim_in, y_hat, mk, _ = stim.generate_trial(task_prime)
 
-                output,_ = sess.run([model.output, model.syn_x_hist], feed_dict = {x:stim_in, gating:par['gating'][task_prime]})
+                output,_ = sess.run([slow_model.output, slow_model.syn_x_hist], feed_dict = {x:stim_in, gating:par['gating'][task_prime]})
                 acc = get_perf(y_hat, output, mk)
                 accuracy_grid[task,task_prime] += acc/num_reps
 
@@ -730,24 +727,24 @@ def main(save_fn=None, gpu_id = None):
 
             # Update big omegaes, and reset other values before starting new task
             if par['stabilization'] == 'pathint':
-                big_omegas = sess.run([model.update_big_omega, model.big_omega_var])
+                big_omegas = sess.run([slow_model.update_big_omega, slow_model.big_omega_var])
             elif par['stabilization'] == 'EWC':
                 for n in range(par['EWC_fisher_num_batches']):
                     name, stim_in, y_hat, mk, _ = stim.generate_trial(task)
-                    big_omegas = sess.run([model.update_big_omega,model.big_omega_var], feed_dict = \
+                    big_omegas = sess.run([slow_model.update_big_omega,slow_model.big_omega_var], feed_dict = \
                         {x:stim_in, target:y_hat, gating:par['gating'][task], mask:mk})
 
 
 
             # Reset the Adam Optimizer, and set the previous parater values to their current values
-            sess.run(model.reset_adam_op)
-            sess.run(model.reset_prev_vars)
+            sess.run(slow_model.reset_adam_op)
+            sess.run(slow_model.reset_prev_vars)
             if par['stabilization'] == 'pathint':
-                sess.run(model.reset_small_omega)
+                sess.run(slow_model.reset_small_omega)
 
             # reset weights between tasks if called upon
             if par['reset_weights']:
-                sess.run(model.reset_weights)
+                sess.run(slow_model.reset_weights)
 
 
 
