@@ -41,6 +41,7 @@ par = {
     'SLOW'                  : True,
     'distillation'          : True,
     'training'              : True,
+    'T'                     : 3,
     'num_layers_slow'       : 3,
     'n_outputs'             : [],
 

@@ -9,7 +9,6 @@ import os, time
 import pickle
 import convolutional_layers
 from itertools import product
-from sklearn.utils.extmath import softmax
 import matplotlib.pyplot as plt
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID" # so the IDs match nvidia-smi
@@ -684,10 +683,7 @@ def main(save_fn=None, gpu_id = None):
                 if par['distillation']:
                     # getting fast output from the trained fast network
                     fast_output,_ = sess.run([model.output, model.syn_x_hist], feed_dict = {x:stim_in, gating:par['gating'][task_prime]})
-                    temp = []
-                    for elem in fast_output:
-                        temp.append(softmax(elem))
-                    fast_output = np.array(temp)
+                    fast_output = softmax(np.array(fast_output))
 
                     if par['stabilization'] == 'pathint':
                         _, _, loss, AL, spike_loss_slow, ent_loss, output = sess.run([slow_model.train_op, \
@@ -781,6 +777,12 @@ def main(save_fn=None, gpu_id = None):
             pickle.dump(save_results, open(par['save_dir'] + save_fn, 'wb'))
 
     print('\nSlow Model execution complete.')
+
+def softmax(x):
+    temp = np.exp(x/par['T'])
+    s = [np.sum(temp, axis=2) for i in range(par['n_output'])]
+    return temp / np.stack(s, axis=2)
+    #return np.divide(temp, np.stack(np.sum(temp, axis=2)))
 
 def get_perf(target, output, mask):
 
