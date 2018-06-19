@@ -572,6 +572,7 @@ def main(save_fn=None, gpu_id = None):
     stim = stimulus.MultiStimulus()
     accuracy_full = []
     accuracy_grid = np.zeros((par['n_tasks'], par['n_tasks']))
+    accuracy_grid_slow = np.zeros((par['n_tasks'], par['n_tasks']))
 
 
     key_info = ['synapse_config','spike_cost','weight_cost','entropy_cost','omega_c','omega_xi',\
@@ -638,9 +639,7 @@ def main(save_fn=None, gpu_id = None):
                 acc = get_perf(y_hat, fast_output, mk)
                 accuracy_grid[task,task_prime] += acc/num_reps
 
-            print('Accuracy grid after task {}:'.format(task))
-            print(accuracy_grid[task,:])
-            print('')
+                print("Testing accuracy: ", acc)
 
             # Update big omegaes, and reset other values before starting new task
             if par['stabilization'] == 'pathint':
@@ -748,11 +747,9 @@ def main(save_fn=None, gpu_id = None):
 
                 output,_ = sess.run([slow_model.output, slow_model.syn_x_hist], feed_dict = {x:stim_in, gating:par['gating'][task_prime]})
                 acc = get_perf(y_hat, output, mk)
-                accuracy_grid[task,task_prime] += acc/num_reps
+                accuracy_grid_slow[task,task_prime] += acc/num_reps
 
-            print('Accuracy grid after task {}:'.format(task))
-            print(accuracy_grid[task,:])
-            print('')
+                print("Testing accuracy: ", acc)
 
             # Update big omegaes, and reset other values before starting new task
             if par['stabilization'] == 'pathint':
@@ -780,7 +777,7 @@ def main(save_fn=None, gpu_id = None):
 
         if par['save_analysis']:
             save_results = {'task': task, 'accuracy': accuracy, 'accuracy_full': accuracy_full, \
-                            'accuracy_grid': accuracy_grid, 'big_omegas': big_omegas, 'par': par}
+                            'accuracy_grid': accuracy_grid_slow, 'big_omegas': big_omegas, 'par': par}
             pickle.dump(save_results, open(par['save_dir'] + save_fn, 'wb'))
 
     print('\nSlow Model execution complete.')
