@@ -87,7 +87,8 @@ par = {
 
     # Training specs
     'batch_size'            : 256,
-    'n_train_batches'       : 50000,
+    'n_train_batches'       : 300,
+    'n_train_batches_slow'  : 50000,
 
     # Omega parameters
     'omega_c'               : 0.05,
@@ -305,7 +306,7 @@ def update_dependencies():
     par['W_in_init'] = c*np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_input'], par['n_hidden']]))
     par['W_in_inits'] = [c*np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_input'], par['n_hidden']]))]
     for i in range(0,par['num_layers_slow']-1):
-        par['W_in_inits'].append(c*np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_outputs'][i], par['n_hidden']]))) 
+        par['W_in_inits'].append(c*np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_outputs'][i], par['n_hidden']])))
     #par['W_d_in_init'] = np.float32(np.random.uniform(-c, c, size = [par['n_input'], par['n_d_hidden']]))
     #par['W_in_init'][-par['num_rule_tuned']:, :] -= 0.5*np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['num_rule_tuned'], par['n_hidden']]))
 
@@ -316,11 +317,12 @@ def update_dependencies():
 
     par['b_out_init'] = np.zeros((1,par['n_output']), dtype = np.float32)
     par['b_out_inits'] = []
+    par['W_out_mask'] = np.ones((par['n_hidden'], par['n_output']), dtype=np.float32)
     par['W_out_masks'] = []
     for i in range(0,par['num_layers_slow']):
         par['b_out_inits'].append(np.zeros((1,par['n_outputs'][i]), dtype = np.float32))
         par['W_out_masks'].append(np.ones((par['n_hidden'], par['n_outputs'][i]), dtype=np.float32))
-    
+
     par['W_in_mask'] = np.ones((par['n_input'], par['n_hidden']), dtype=np.float32)
     par['W_in_masks'] = [np.ones((par['n_input'], par['n_hidden']), dtype=np.float32)]
     for i in range(0,par['num_layers_slow']-1):

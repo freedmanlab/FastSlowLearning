@@ -1,6 +1,6 @@
 import numpy as np
 from parameters_RL import *
-import model
+import model_fastslow
 import sys, os
 import pickle
 

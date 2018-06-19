@@ -4,7 +4,7 @@ import tensorflow as tf
 import numpy as np
 import stimulus
 import AdamOpt
-from parameters_RL import *
+from parameters import *
 import os, time
 import pickle
 import convolutional_layers
@@ -33,8 +33,6 @@ class Model:
 
         # Build the TensorFlow graph
         self.hidden_state_hist = []
-        self.hidden_state_hists = []
-
         self.syn_x_hist = []
         self.syn_u_hist = []
         self.output = []
@@ -47,64 +45,23 @@ class Model:
     def run_model(self):
 
         with tf.variable_scope('rnn'):
-            W_ins = []
-            W_rnns = []
-            b_rnns = []
-            for i in range(par['num_layers_slow']):
-                W_ins.append(tf.get_variable('W_in'+str(i+1),initializer=par['W_in_inits'][i], trainable=True))
-                W_rnns.append(tf.get_variable('W_rnn'+str(i+1),initializer=par['W_rnn_inits'][i], trainable=True))
-                b_rnns.append(tf.get_variable('b_rnn'+str(i+1),initializer=par['b_rnn_inits'][i], trainable=True))
-            '''
-            # First RNN layer
-            W_in1  = tf.get_variable('W_in1', initializer=par['W_in_init1'], trainable=True)
-            W_rnn1 = tf.get_variable('W_rnn1', initializer=par['W_rnn_init1'], trainable=True)
-            b_rnn1 = tf.get_variable('b_rnn1', initializer=par['b_rnn_init1'], trainable=True)
-
-            # Second RNN layer
-            W_in2  = tf.get_variable('W_in2', initializer=par['W_in_init2'], trainable=True)
-            W_rnn2 = tf.get_variable('W_rnn2', initializer=par['W_rnn_init2'], trainable=True)
-            b_rnn2 = tf.get_variable('b_rnn2', initializer=par['b_rnn_init2'], trainable=True)
-
-            # Third RNN layer
-            W_in3  = tf.get_variable('W_in3', initializer=par['W_in_init3'], trainable=True)
-            W_rnn3 = tf.get_variable('W_rnn3', initializer=par['W_rnn_init3'], trainable=True)
-            b_rnn3 = tf.get_variable('b_rnn3', initializer=par['b_rnn_init3'], trainable=True)
-            '''
+            W_in  = tf.get_variable('W_in', initializer=par['W_in_init'], trainable=True)
+            W_rnn = tf.get_variable('W_rnn', initializer=par['W_rnn_init'], trainable=True)
+            b_rnn = tf.get_variable('b_rnn', initializer=par['b_rnn_init'], trainable=True)
 
         with tf.variable_scope('output'):
-            W_outs = []
-            b_outs = []
-
-            for i in range(par['num_layers_slow']):
-                W_outs.append(tf.get_variable('W_out'+str(i+1),initializer=par['W_out_inits'][i], trainable=True))
-                b_outs.append(tf.get_variable('b_out'+str(i+1),initializer=par['b_out_inits'][i], trainable=True))
-            '''
-            # First RNN layer
-            W_out1 = tf.get_variable('W_out1', initializer=par['W_out_init1'], trainable=True)
-            b_out1 = tf.get_variable('b_out1', initializer=par['b_out_init1'], trainable=True)
-
-            # Second RNN layer
-            W_out2 = tf.get_variable('W_out2', initializer=par['W_out_init2'], trainable=True)
-            b_out2 = tf.get_variable('b_out2', initializer=par['b_out_init2'], trainable=True)
-
-            # Third RNN layer
-            W_out3 = tf.get_variable('W_out3', initializer=par['W_out_init3'], trainable=True)
-            b_out3 = tf.get_variable('b_out3', initializer=par['b_out_init3'], trainable=True)
-            '''
+            W_out = tf.get_variable('W_out', initializer=par['W_out_init'], trainable=True)
+            b_out = tf.get_variable('b_out', initializer=par['b_out_init'], trainable=True)
 
         if par['EI']:
             W_rnn = tf.matmul(self.W_ei, tf.nn.relu(W_rnn))
 
-        hs = []
-        for i in range(par['num_layers_slow']):
-            hs.append(tf.constant(par['h_inits'][i]))
 
-        ys = [0]*par['num_layers_slow']
-
+        h = tf.constant(par['h_init'])
         syn_x = tf.constant(par['syn_x_init'])
         syn_u = tf.constant(par['syn_u_init'])
         for x in self.input_data:
-            '''
+
             if par['synapse_config'] == 'std_stf':
                 # implement both synaptic short term facilitation and depression
                 syn_x += par['alpha_std']*(1-syn_x) - par['dt_sec']*syn_u*syn_x*h
@@ -131,31 +88,25 @@ class Model:
             else:
                 # no synaptic plasticity
                 h_post = h
-            '''
+
 
 
             # Hidden State
-            hs[0] = self.gating*tf.nn.relu((1-par['alpha_neuron'])*hs[0] + par['alpha_neuron']*(tf.matmul(x, W_ins[0]) + \
-                tf.matmul(hs[0], W_rnns[0]) + b_rnns[0]) + tf.random_normal(hs[0].shape, 0, par['noise_rnn'], dtype=tf.float32))
-            # Output State
-            ys[0] = tf.matmul(hs[0], W_outs[0]) + b_outs[0]
-
-            for i in range(1,par['num_layers_slow']):
-                # Hidden State
-                hs[i] = self.gating*tf.nn.relu((1-par['alpha_neuron'])*hs[i] + par['alpha_neuron']*(tf.matmul(ys[i-1], W_ins[i]) + \
-                    tf.matmul(hs[i], W_rnns[i]) + b_rnns[i]) + tf.random_normal(hs[i].shape, 0, par['noise_rnn'], dtype=tf.float32))
-                # Output State
-                ys[i] = tf.matmul(hs[i], W_outs[i]) + b_outs[i]
+            h = self.gating*tf.nn.relu((1-par['alpha_neuron'])*h + par['alpha_neuron']*(tf.matmul(x, W_in) + \
+                tf.matmul(h_post, W_rnn) + b_rnn) + tf.random_normal(h.shape, 0, par['noise_rnn'], dtype=tf.float32))
 
             #h = tf.minimum(50., h)
 
+            # Output State
+            y = tf.matmul(h, W_out) + b_out
 
             # Bookkeeping lists
-            self.hidden_state_hists.append(hs)
+            self.hidden_state_hist.append(h)
             self.syn_x_hist.append(syn_x)
             self.syn_u_hist.append(syn_u)
+            self.output.append(y)
 
-            self.output.append(ys[par['num_layers_slow']-1])
+
 
     def optimize(self):
 
@@ -177,13 +128,7 @@ class Model:
 
         self.aux_loss = tf.add_n(aux_losses)
 
-        self.spike_losses = []
-        for i in range(par['num_layers_slow']):
-            self.spike_losses.append(par['spike_cost']*tf.reduce_mean(tf.square(self.hidden_state_hists[i])))
-
-
-        self.spike_loss_slow = sum(self.spike_losses)/par['num_layers_slow']
-
+        self.spike_loss = par['spike_cost']*tf.reduce_mean(tf.square(self.hidden_state_hist))
 
 
         self.task_loss = tf.reduce_mean([mask*tf.nn.softmax_cross_entropy_with_logits(logits = y, \
@@ -204,8 +149,8 @@ class Model:
         self.weight_loss = par['weight_cost']*(tf.reduce_mean(active_weights_in*W_in**2) + tf.reduce_mean(tf.nn.relu(active_weights_rnn*W_rnn)**2))
         """
         # Gradient of the loss+aux function, in order to both perform training and to compute delta_weights
-        with tf.control_dependencies([self.task_loss, self.aux_loss, self.spike_loss_slow,self.entropy_loss ]):
-            self.train_op = adam_optimizer.compute_gradients(self.task_loss + self.aux_loss + self.spike_loss_slow - self.entropy_loss)
+        with tf.control_dependencies([self.task_loss, self.aux_loss, self.spike_loss, self.entropy_loss ]):
+            self.train_op = adam_optimizer.compute_gradients(self.task_loss + self.aux_loss + self.spike_loss - self.entropy_loss)
 
         # Stabilizing weights
         if par['stabilization'] == 'pathint':
@@ -363,8 +308,8 @@ def main(save_fn=None, gpu_id = None):
                 name, stim_in, y_hat, mk, _ = stim.generate_trial(task)
 
                 if par['stabilization'] == 'pathint':
-                    _, _, loss, AL, spike_loss_slow, ent_loss, output = sess.run([model.train_op, \
-                        model.update_small_omega, model.task_loss, model.aux_loss, model.spike_loss_slow, \
+                    _, _, loss, AL, spike_loss, ent_loss, output = sess.run([model.train_op, \
+                        model.update_small_omega, model.task_loss, model.aux_loss, model.spike_loss, \
                         model.entropy_loss, model.output], \
                         feed_dict = {x:stim_in, target:y_hat, gating:par['gating'][task], mask:mk})
                     sess.run([model.reset_rnn_weights])
@@ -377,7 +322,7 @@ def main(save_fn=None, gpu_id = None):
 
                 if i%100 == 0:
                     acc = get_perf(y_hat, output, mk)
-                    print('Iter ', i, 'Task name ', name, ' accuracy', acc, ' loss ', loss, ' aux loss', AL, ' spike loss', spike_loss_slow, \
+                    print('Iter ', i, 'Task name ', name, ' accuracy', acc, ' loss ', loss, ' aux loss', AL, ' spike loss', spike_loss, \
                         ' entropy loss', ent_loss)
 
 
