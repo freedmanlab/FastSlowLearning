@@ -110,7 +110,7 @@ class MultiStimulus:
         return self.task_types
 
 
-    def generate_trial(self, current_task):
+    def generate_trial(self, current_task, training):
 
         self.trial_info = {
             'neural_input'   : np.random.normal(par['input_mean'], par['noise_in'], size=self.input_shape),
@@ -126,7 +126,7 @@ class MultiStimulus:
             self.trial_info['neural_input'][:, :, -par['num_rule_tuned']:] += rule_signal*self.rule_signal_factor
 
         task = self.task_types[current_task]    # Selects a task from the list
-        task[0](*task[1:])                      # Generates that task into trial_info
+        task[0](*task[1:], training)                      # Generates that task into trial_info
         # Returns the trial info and the task name
 
         # give -1 for breaking fixation, -0.01/+2 for choosing incorrectly/correctly
@@ -179,7 +179,7 @@ class MultiStimulus:
             self.trial_info['train_mask'], self.trial_info['reward_data']
 
 
-    def task_go(self, variant='go', offset=0):
+    def task_go(self, variant='go', offset=0, training=True):
 
         # Task parameters
         if variant == 'go':
@@ -214,16 +214,12 @@ class MultiStimulus:
             """
             modality   = np.random.randint(2)
             neuron_ind = range(self.modality_size*modality, self.modality_size*(1+modality))
-            if par['training']:
-                print("Training")
-                stim_dir = np.random.choice(self.motion_dirs - 1)
-                if stim_dir == 7:
-                    print("This shouldn't be happening??")
+
+            if training:
+                stim_dir = np.random.choice(self.motion_dirs[3:])
             else:
-                print("Testing")
+                # print("Testing phase")
                 stim_dir   = np.random.choice(self.motion_dirs)
-                if stim_dir == 7:
-                    print("New stimulus!!")
             target_ind = int(np.round(par['num_motion_dirs']*(stim_dir+offset)/(2*np.pi))%par['num_motion_dirs'])
 
             self.trial_info['neural_input'][stim_onset[b]:stim_off, b, neuron_ind] += np.reshape(self.circ_tuning(stim_dir),(1,-1))
@@ -235,7 +231,7 @@ class MultiStimulus:
         return self.trial_info
 
 
-    def task_dm(self, variant='dm1'):
+    def task_dm(self, variant='dm1',training=True):
 
         # Create trial stimuli
         stim_dir1 = np.random.choice(self.motion_dirs, [1, par['batch_size']])
@@ -344,7 +340,7 @@ class MultiStimulus:
         return self.trial_info
 
 
-    def task_dm_dly(self, variant='dm1'):
+    def task_dm_dly(self, variant='dm1', training=True):
 
         # Create trial stimuli
         stim_dir1 = 2*np.pi*np.random.rand(1, par['batch_size'])
@@ -442,7 +438,7 @@ class MultiStimulus:
         return self.trial_info
 
 
-    def task_matching(self, variant='dms'):
+    def task_matching(self, variant='dms', training=True):
 
         # Determine matches, and get stimuli
         if variant in ['dms', 'dnms']:

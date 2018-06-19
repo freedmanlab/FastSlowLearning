@@ -600,7 +600,7 @@ def main(save_fn=None, gpu_id = None):
             for i in range(par['n_train_batches']):
 
                 # make batch of training data
-                name, stim_in, y_hat, mk, _ = stim.generate_trial(task)
+                name, stim_in, y_hat, mk, _ = stim.generate_trial(task, training=True)
 
                 if par['stabilization'] == 'pathint':
                     _, _, loss, AL, spike_loss, ent_loss, fast_output = sess.run([model.train_op, \
@@ -632,8 +632,7 @@ def main(save_fn=None, gpu_id = None):
             for (task_prime, r) in product(range(task+1), range(num_reps)):
 
                 # make batch of training data
-                par['training'] = False
-                name, stim_in, y_hat, mk, _ = stim.generate_trial(task_prime)
+                name, stim_in, y_hat, mk, _ = stim.generate_trial(task_prime, training=False)
 
                 fast_output,_ = sess.run([model.output, model.syn_x_hist], feed_dict = {x:stim_in, gating:par['gating'][task_prime]})
                 acc = get_perf(y_hat, fast_output, mk)
@@ -681,8 +680,7 @@ def main(save_fn=None, gpu_id = None):
             for i in range(par['n_train_batches_slow']):
 
                 # make batch of training data
-                par['training'] = True
-                name, stim_in, y_hat, mk, _ = stim.generate_trial(task)
+                name, stim_in, y_hat, mk, _ = stim.generate_trial(task, training=True)
 
                 if par['distillation']:
                     # getting fast output from the trained fast network
@@ -745,9 +743,8 @@ def main(save_fn=None, gpu_id = None):
             num_reps = 10
             for (task_prime, r) in product(range(task+1), range(num_reps)):
 
-                # make batch of training data
-                par['training'] = False
-                name, stim_in, y_hat, mk, _ = stim.generate_trial(task_prime)
+                # make batch of training data            
+                name, stim_in, y_hat, mk, _ = stim.generate_trial(task_prime, training=False)
 
                 output,_ = sess.run([slow_model.output, slow_model.syn_x_hist], feed_dict = {x:stim_in, gating:par['gating'][task_prime]})
                 acc = get_perf(y_hat, output, mk)
