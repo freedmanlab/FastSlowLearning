@@ -43,7 +43,9 @@ par = {
     'training'              : True,
     'T'                     : 3,
     'num_layers_slow'       : 3,
-    'n_outputs'             : [],
+
+    # INFO network
+    'INFO'                  : True,
 
     # Euclidean shape
     'num_sublayers'         : 1,
@@ -222,7 +224,6 @@ def update_dependencies():
 
     # Number of output neurons
     par['n_output'] = par['num_motion_dirs'] + 1
-    par['n_outputs'] = [par['n_output']*3, par['n_output']*2, par['n_output']]
     par['n_pol'] = par['num_motion_dirs'] + 1
 
     # Number of input neurons
@@ -267,7 +268,6 @@ def update_dependencies():
     ####################################################################
 
     par['h_init'] = 0.1*np.ones((par['batch_size'], par['n_hidden']), dtype=np.float32)
-    par['h_inits'] = [0.1*np.ones((par['batch_size'], par['n_hidden']), dtype=np.float32)] * par['num_layers_slow']
     par['h_d_init'] = 0.1*np.ones((par['batch_size'], par['n_d_hidden']), dtype=np.float32)
 
     # Initialize input weights
@@ -282,7 +282,6 @@ def update_dependencies():
         par['W_d_rnn_init'] *= par['W_d_rnn_mask']
     else:
         par['W_rnn_init'] =  np.float32(np.random.uniform(-c, c, size = [par['n_hidden'], par['n_hidden']]))
-        par['W_rnn_inits'] = [np.float32(np.random.uniform(-c, c, size = [par['n_hidden'], par['n_hidden']]))] * par['num_layers_slow']
         par['W_rnn_mask'] = np.ones((par['n_hidden'], par['n_hidden']), dtype=np.float32)
     """
     if par['synapse_config'] == None:
@@ -300,40 +299,37 @@ def update_dependencies():
 
     #par['W_out_init'] = np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_hidden'], par['n_output']]))
     par['W_out_init'] = np.float32(np.random.uniform(-c, c, size = [par['n_hidden'], par['n_output']]))
-    par['W_out_inits'] = []
-    for i in range(0,par['num_layers_slow']):
-        par['W_out_inits'].append(np.float32(np.random.uniform(-c, c, size = [par['n_hidden'], par['n_outputs'][i]])))
-
+    
     #par['W_in_init'] = np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_input'], par['n_hidden']]))
     #par['W_in_init'] = np.float32(np.random.uniform(-0.25, 0.25, size = [par['n_input'], par['n_hidden']]))
     par['W_in_init'] = c*np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_input'], par['n_hidden']]))
-    par['W_in_inits'] = [c*np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_input'], par['n_hidden']]))]
-    for i in range(0,par['num_layers_slow']-1):
-        par['W_in_inits'].append(c*np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_outputs'][i], par['n_hidden']])))
     #par['W_d_in_init'] = np.float32(np.random.uniform(-c, c, size = [par['n_input'], par['n_d_hidden']]))
     #par['W_in_init'][-par['num_rule_tuned']:, :] -= 0.5*np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['num_rule_tuned'], par['n_hidden']]))
 
     par['b_rnn_init'] = np.zeros((1,par['n_hidden']), dtype = np.float32)
-    par['b_rnn_inits'] = [np.zeros((1,par['n_hidden']), dtype = np.float32)] * par['num_layers_slow']
 
     par['b_d_rnn_init'] = np.zeros((1,par['n_d_hidden']), dtype = np.float32)
 
     par['b_out_init'] = np.zeros((1,par['n_output']), dtype = np.float32)
-    par['b_out_inits'] = []
     par['W_out_mask'] = np.ones((par['n_hidden'], par['n_output']), dtype=np.float32)
-    par['W_out_masks'] = []
-    for i in range(0,par['num_layers_slow']):
-        par['b_out_inits'].append(np.zeros((1,par['n_outputs'][i]), dtype = np.float32))
-        par['W_out_masks'].append(np.ones((par['n_hidden'], par['n_outputs'][i]), dtype=np.float32))
 
     par['W_in_mask'] = np.ones((par['n_input'], par['n_hidden']), dtype=np.float32)
-    par['W_in_masks'] = [np.ones((par['n_input'], par['n_hidden']), dtype=np.float32)]
-    for i in range(0,par['num_layers_slow']-1):
-        par['W_in_masks'].append(np.ones((par['n_outputs'][i], par['n_hidden']), dtype=np.float32))
-
+    
     if par['EI']:
         par['W_out_init'][par['ind_inh'], :] = 0
         par['W_out_mask'][par['ind_inh'], :] = 0
+
+    # SLOW network
+    if par['SLOW']:
+        par['h_inits'] = [0.1*np.ones((par['batch_size'], par['n_hidden']), dtype=np.float32)] * par['num_layers_slow']
+        par['W_rnn_inits'] = [np.float32(np.random.uniform(-c, c, size = [par['n_hidden'], par['n_hidden']]))] * par['num_layers_slow']
+        par['W_in_slow_init'] = [c*np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_input'], par['n_hidden']]))]
+        par['W_out_slow_init'] = np.float32(np.random.uniform(-c, c, size = [par['n_hidden'], par['n_output']]))
+        par['b_rnn_inits'] = [np.zeros((1,par['n_hidden']), dtype = np.float32)] * par['num_layers_slow']
+
+    # INFO network
+    if par['INFO']:
+        par['W_t_inits'] = [c*np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_hidden'], par['n_hidden']]))] * (par['num_layers_slow'] - 1)
 
     # RL
     par['W_pol_out_init'] = np.float32(np.random.uniform(-c, c, size = [par['n_hidden'], par['n_pol']]))
