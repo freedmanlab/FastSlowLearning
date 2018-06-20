@@ -409,7 +409,7 @@ class Slow_Model:
         self.info_loss = tf.reduce_mean([tf.metrics.mean_squared_error(labels=x, predictions= h_hat[0]) for (x, h_hat) in zip(self.input_data, self.info_outputs)])
         for i in range(1,par['num_layers_slow']):
             self.info_loss += tf.reduce_mean([tf.metrics.mean_squared_error(labels=hs[i-1], predictions= h_hat[i]) for (hs, h_hat) in zip(self.hidden_state_hists, self.info_outputs)])
-
+        self.info_loss *= 1e-7
 
         self.task_loss = tf.reduce_mean([mask*tf.nn.softmax_cross_entropy_with_logits(logits = y, \
             labels = target, dim=1) for y, target, mask in zip(self.output, self.target_data, self.mask)])
