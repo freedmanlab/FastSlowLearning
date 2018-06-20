@@ -269,7 +269,7 @@ class Slow_Model:
 
         # Build the TensorFlow graph
         self.hidden_state_hists = []
-        #self.info_outputs = []
+        self.info_outputs = []
 
         self.syn_x_hist = []
         self.syn_u_hist = []
@@ -300,13 +300,12 @@ class Slow_Model:
             W_out_slow = tf.get_variable('W_out_slow',initializer=par['W_out_slow_init'], trainable=True)
             b_out_slow = tf.get_variable('b_out_slow',initializer=par['b_out_slow_init'], trainable=True)
 
-        '''
         with tf.variable_scope('info_in'):
             W_z_ins = []
-            b_z_ins = []
+            b_zs = []
             for i in range(par['num_layers_slow']):
                 W_z_ins.append(tf.get_variable('W_z_in'+str(i+1),initializer=par['W_z_in_inits'][i], trainable=True))
-                b_z_ins.append(tf.get_variable('b_z_in'+str(i+1),initializer=par['b_z_in_inits'][i], trainable=True))
+                b_z_ins.append(tf.get_variable('b_z'+str(i+1),initializer=par['b_z_inits'][i], trainable=True))
 
         with tf.variable_scope('info_out'):
             W_z_outs = []
@@ -314,7 +313,7 @@ class Slow_Model:
             for i in range(par['num_layers_slow']):
                 W_z_outs.append(tf.get_variable('W_z_out'+str(i+1),initializer=par['W_z_out_inits'][i], trainable=True))
                 b_z_outs.append(tf.get_variable('b_z_out'+str(i+1),initializer=par['b_z_out_inits'][i], trainable=True))
-        '''
+
         if par['EI']:
             W_rnn = tf.matmul(self.W_ei, tf.nn.relu(W_rnn))
 
@@ -366,14 +365,14 @@ class Slow_Model:
             y = tf.matmul(hs[-1], W_out_slow) + b_out_slow
 
             #h = tf.minimum(50., h)
-            '''
+
             # Information Maintaining
             h_hat = []
             for i in range(par['num_layers_slow']):
-                h_hat.append(tf.nn.relu(tf.matmul(tf.nn.relu(tf.matmul(hs[i], W_z_ins[i]) + b_z_ins[i]), W_z_outs[i]) + b_z_outs[i]))
-            '''
+                h_hat.append(tf.nn.relu(tf.matmul(tf.nn.relu(tf.matmul(hs[i], W_z_ins[i]) + b_zs[i]), W_z_outs[i]) + b_z_outs[i]))
+
             # Bookkeeping lists
-            #self.info_outputs.append(h_hat)
+            self.info_outputs.append(h_hat)
             self.hidden_state_hists.append(hs)
             self.syn_x_hist.append(syn_x)
             self.syn_u_hist.append(syn_u)
@@ -383,7 +382,7 @@ class Slow_Model:
     def optimize(self):
 
         # Use all trainable variables, except those in the convolutional layers
-        self.variables = [var for var in tf.trainable_variables() if (not var.op.name.find('conv')==0 and var.op.name.find('slow')==0)]
+        self.variables = [var for var in tf.trainable_variables() if (not var.op.name.find('conv')==0 and (var.op.name.find('slow')==0 or var.op.name.find('info')==0)]
         adam_optimizer = AdamOpt_Slow(self.variables, learning_rate = par['learning_rate'])
 
         previous_weights_mu_minus_1 = {}
@@ -405,14 +404,13 @@ class Slow_Model:
             self.spike_losses.append(par['spike_cost']*tf.reduce_mean(tf.square(self.hidden_state_hists[i])))
 
         self.spike_loss_slow = sum(self.spike_losses)/par['num_layers_slow']
-        '''
-        # Info losses
-        self.info_losses = []
-        for i in range(par['num_layers_slow']):
-            self.info_losses.append()
 
-        self.info_loss_slow = sum(self.info_losses)/par['num_layers_slow']
-        '''
+        # Info losses
+        self.info_loss = tf.reduce_mean([tf.metrics.mean_squared_error(labels=x, predictions= h_hat[0]) for (x, h_hat) in zip(self.input_data, self.info_outputs)])
+        for i in range(1,par['num_layers_slow']):
+            self.info_loss += tf.reduce_mean([tf.metrics.mean_squared_error(labels=hs[i-1], predictions= h_hat[i]) for (hs, h_hat) in zip(self.hidden_state_hists, self.info_outputs)])
+
+
         self.task_loss = tf.reduce_mean([mask*tf.nn.softmax_cross_entropy_with_logits(logits = y, \
             labels = target, dim=1) for y, target, mask in zip(self.output, self.target_data, self.mask)])
 
@@ -432,8 +430,8 @@ class Slow_Model:
         # Gradient of the loss+aux function, in order to both perform training and to compute delta_weights
         #with tf.control_dependencies([self.task_loss, self.aux_loss, self.spike_loss_slow,self.entropy_loss ]):
         #    self.train_op = adam_optimizer.compute_gradients(self.task_loss + self.aux_loss + self.spike_loss_slow - self.entropy_loss)
-        with tf.control_dependencies([self.task_loss, self.spike_loss_slow, self.entropy_loss ]):
-            self.train_op = adam_optimizer.compute_gradients(self.task_loss + self.spike_loss_slow - self.entropy_loss)
+        with tf.control_dependencies([self.task_loss, self.spike_loss_slow, self.info_loss, self.entropy_loss ]):
+            self.train_op = adam_optimizer.compute_gradients(self.task_loss + self.spike_loss_slow + self.info_loss - self.entropy_loss)
 
         # Stabilizing weights
         if par['stabilization'] == 'pathint':
@@ -690,15 +688,15 @@ def main(save_fn=None, gpu_id = None):
                             {x:stim_in, target:fast_output, gating:par['gating'][task], mask:mk})
 
                     else:
-                         _, loss, spike_loss_slow, ent_loss, output = sess.run([slow_model.train_op, \
-                            slow_model.task_loss, slow_model.spike_loss_slow, \
+                         _, loss, spike_loss_slow, info_loss, ent_loss, output = sess.run([slow_model.train_op, \
+                            slow_model.task_loss, slow_model.spike_loss_slow, slow_model.info_loss,\
                             slow_model.entropy_loss, slow_model.output], \
                             feed_dict = {x:stim_in, target:fast_output, gating:par['gating'][task], mask:mk})
 
                     if i%100 == 0:
                         acc = get_perf(y_hat, output, mk)
                         print('Iter ', i, 'Task name ', name, 'accuracy', acc, ' loss ', loss,  'spike loss', spike_loss_slow, \
-                            ' entropy loss', ent_loss)
+                            ' info_loss', info_loss, ' entropy loss', ent_loss)
 
                 else:
                     if par['stabilization'] == 'pathint':
