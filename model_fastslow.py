@@ -269,6 +269,7 @@ class Slow_Model:
 
         # Build the TensorFlow graph
         self.hidden_state_hists = []
+        #self.info_outputs = []
 
         self.syn_x_hist = []
         self.syn_u_hist = []
@@ -289,22 +290,6 @@ class Slow_Model:
                 W_ins.append(tf.get_variable('W_in'+str(i+1),initializer=par['W_in_inits'][i], trainable=True))
                 W_rnns.append(tf.get_variable('W_rnn'+str(i+1),initializer=par['W_rnn_inits'][i], trainable=True))
                 b_rnns.append(tf.get_variable('b_rnn'+str(i+1),initializer=par['b_rnn_inits'][i], trainable=True))
-            '''
-            # First RNN layer
-            W_in1  = tf.get_variable('W_in1', initializer=par['W_in_init1'], trainable=True)
-            W_rnn1 = tf.get_variable('W_rnn1', initializer=par['W_rnn_init1'], trainable=True)
-            b_rnn1 = tf.get_variable('b_rnn1', initializer=par['b_rnn_init1'], trainable=True)
-
-            # Second RNN layer
-            W_in2  = tf.get_variable('W_in2', initializer=par['W_in_init2'], trainable=True)
-            W_rnn2 = tf.get_variable('W_rnn2', initializer=par['W_rnn_init2'], trainable=True)
-            b_rnn2 = tf.get_variable('b_rnn2', initializer=par['b_rnn_init2'], trainable=True)
-
-            # Third RNN layer
-            W_in3  = tf.get_variable('W_in3', initializer=par['W_in_init3'], trainable=True)
-            W_rnn3 = tf.get_variable('W_rnn3', initializer=par['W_rnn_init3'], trainable=True)
-            b_rnn3 = tf.get_variable('b_rnn3', initializer=par['b_rnn_init3'], trainable=True)
-            '''
 
         with tf.variable_scope('slow_output'):
             W_outs = []
@@ -313,20 +298,21 @@ class Slow_Model:
             for i in range(par['num_layers_slow']):
                 W_outs.append(tf.get_variable('W_out'+str(i+1),initializer=par['W_out_inits'][i], trainable=True))
                 b_outs.append(tf.get_variable('b_out'+str(i+1),initializer=par['b_out_inits'][i], trainable=True))
-            '''
-            # First RNN layer
-            W_out1 = tf.get_variable('W_out1', initializer=par['W_out_init1'], trainable=True)
-            b_out1 = tf.get_variable('b_out1', initializer=par['b_out_init1'], trainable=True)
+        '''
+        with tf.variable_scope('info_in'):
+            W_z_ins = []
+            b_z_ins = []
+            for i in range(par['num_layers_slow']):
+                W_z_ins.append(tf.get_variable('W_z_in'+str(i+1),initializer=par['W_z_in_inits'][i], trainable=True))
+                b_z_ins.append(tf.get_variable('b_z_in'+str(i+1),initializer=par['b_z_in_inits'][i], trainable=True))
 
-            # Second RNN layer
-            W_out2 = tf.get_variable('W_out2', initializer=par['W_out_init2'], trainable=True)
-            b_out2 = tf.get_variable('b_out2', initializer=par['b_out_init2'], trainable=True)
-
-            # Third RNN layer
-            W_out3 = tf.get_variable('W_out3', initializer=par['W_out_init3'], trainable=True)
-            b_out3 = tf.get_variable('b_out3', initializer=par['b_out_init3'], trainable=True)
-            '''
-
+        with tf.variable_scope('info_out'):
+            W_z_outs = []
+            b_z_outs = []
+            for i in range(par['num_layers_slow']):
+                W_z_outs.append(tf.get_variable('W_z_out'+str(i+1),initializer=par['W_z_out_inits'][i], trainable=True))
+                b_z_outs.append(tf.get_variable('b_z_out'+str(i+1),initializer=par['b_z_out_inits'][i], trainable=True))
+        '''
         if par['EI']:
             W_rnn = tf.matmul(self.W_ei, tf.nn.relu(W_rnn))
 
@@ -383,9 +369,14 @@ class Slow_Model:
                 ys[i] = tf.matmul(hs[i], W_outs[i]) + b_outs[i]
 
             #h = tf.minimum(50., h)
-
-
+            '''
+            # Information Maintaining
+            h_hat = []
+            for i in range(par['num_layers_slow']):
+                h_hat.append(tf.nn.relu(tf.matmul(tf.nn.relu(tf.matmul(hs[i], W_z_ins[i]) + b_z_ins[i]), W_z_outs[i]) + b_z_outs[i]))
+            '''
             # Bookkeeping lists
+            #self.info_outputs.append(h_hat)
             self.hidden_state_hists.append(hs)
             self.syn_x_hist.append(syn_x)
             self.syn_u_hist.append(syn_u)
@@ -416,14 +407,17 @@ class Slow_Model:
         for i in range(par['num_layers_slow']):
             self.spike_losses.append(par['spike_cost']*tf.reduce_mean(tf.square(self.hidden_state_hists[i])))
 
-
         self.spike_loss_slow = sum(self.spike_losses)/par['num_layers_slow']
+        '''
+        # Info losses
+        self.info_losses = []
+        for i in range(par['num_layers_slow']):
+            self.info_losses.append()
 
-
-
+        self.info_loss_slow = sum(self.info_losses)/par['num_layers_slow']
+        '''
         self.task_loss = tf.reduce_mean([mask*tf.nn.softmax_cross_entropy_with_logits(logits = y, \
             labels = target, dim=1) for y, target, mask in zip(self.output, self.target_data, self.mask)])
-
 
         output_softmax = [tf.nn.softmax(y, dim = 1) for y in self.output]
         self.entropy_loss = -par['entropy_cost']*tf.reduce_mean([m*tf.reduce_sum(out_sm*tf.log(1e-7+out_sm), axis = 1) \
@@ -441,7 +435,7 @@ class Slow_Model:
         # Gradient of the loss+aux function, in order to both perform training and to compute delta_weights
         #with tf.control_dependencies([self.task_loss, self.aux_loss, self.spike_loss_slow,self.entropy_loss ]):
         #    self.train_op = adam_optimizer.compute_gradients(self.task_loss + self.aux_loss + self.spike_loss_slow - self.entropy_loss)
-        with tf.control_dependencies([self.task_loss, self.spike_loss_slow,self.entropy_loss ]):
+        with tf.control_dependencies([self.task_loss, self.spike_loss_slow, self.entropy_loss ]):
             self.train_op = adam_optimizer.compute_gradients(self.task_loss + self.spike_loss_slow - self.entropy_loss)
 
         # Stabilizing weights
@@ -738,7 +732,7 @@ def main(save_fn=None, gpu_id = None):
             num_reps = 10
             for (task_prime, r) in product(range(task+1), range(num_reps)):
 
-                # make batch of training data            
+                # make batch of training data
                 name, stim_in, y_hat, mk, _ = stim.generate_trial(task_prime, training=False)
 
                 output,_ = sess.run([slow_model.output, slow_model.syn_x_hist], feed_dict = {x:stim_in, gating:par['gating'][task_prime]})
