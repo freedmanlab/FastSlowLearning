@@ -197,14 +197,14 @@ class AdamOpt_Slow:
                 if 'W_rnn'+str(i+1) in var.op.name:
                     print('Applied W_rnn mask.')
                     delta_grad *= par['W_rnn_mask']
-                elif 'W_in'+str(i+1) in var.op.name:
-                    print('Applied W_in_slow mask.')
-                    delta_grad *= par['W_in_masks'][i]
-                elif 'W_out'+str(i+1) in var.op.name:
-                    print('Applied W_out mask.')
-                    delta_grad *= par['W_out_masks'][i]
-
-            if 'W_d_rnn' in var.op.name:
+            
+            if 'W_in' in var.op.name:
+                print('Applied W_in_slow mask.')
+                delta_grad *= par['W_in_mask']
+            elif 'W_out' in var.op.name:
+                print('Applied W_out mask.')
+                delta_grad *= par['W_out_mask']
+            elif 'W_d_rnn' in var.op.name:
                 print('Applied W_d_rnn mask.')
                 delta_grad *= par['W_d_rnn_mask']
 
