@@ -56,7 +56,6 @@ class AdamOpt:
 
 
     def compute_gradients(self, loss):
-
         self.gradients = self.grad_descent.compute_gradients(loss, var_list = self.variables)
 
         self.t += 1
@@ -65,6 +64,7 @@ class AdamOpt:
 
         #grads_and_vars = []
         for (grads, _), var in zip(self.gradients, self.variables):
+
             new_m = self.beta1*self.m[var.op.name] + (1-self.beta1)*grads
             new_v = self.beta2*self.v[var.op.name] + (1-self.beta2)*grads*grads
 
@@ -174,13 +174,14 @@ class AdamOpt_Slow:
     def compute_gradients(self, loss):
 
         self.gradients = self.grad_descent.compute_gradients(loss, var_list = self.variables)
-
+        print(self.gradients)
         self.t += 1
         lr = self.learning_rate*np.sqrt(1-self.beta2**self.t)/(1-self.beta1**self.t)
         self.update_var_op = []
 
         #grads_and_vars = []
         for (grads, _), var in zip(self.gradients, self.variables):
+
             new_m = self.beta1*self.m[var.op.name] + (1-self.beta1)*grads
             new_v = self.beta2*self.v[var.op.name] + (1-self.beta2)*grads*grads
 
@@ -197,7 +198,7 @@ class AdamOpt_Slow:
                 if 'W_rnn'+str(i+1) in var.op.name:
                     print('Applied W_rnn mask.')
                     delta_grad *= par['W_rnn_mask']
-            
+
             if 'W_in' in var.op.name:
                 print('Applied W_in_slow mask.')
                 delta_grad *= par['W_in_mask']

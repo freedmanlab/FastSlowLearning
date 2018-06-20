@@ -406,10 +406,10 @@ class Slow_Model:
         self.spike_loss_slow = sum(self.spike_losses)/par['num_layers_slow']
 
         # Info losses
-        self.info_loss = tf.reduce_mean([tf.metrics.mean_squared_error(labels=x, predictions= h_hat[0]) for (x, h_hat) in zip(self.input_data, self.info_outputs)])
+        self.info_loss = tf.reduce_mean([tf.square(x - h_hat[0]) for (x, h_hat) in zip(self.input_data, self.info_outputs)])
         for i in range(1,par['num_layers_slow']):
-            self.info_loss += tf.reduce_mean([tf.metrics.mean_squared_error(labels=hs[i-1], predictions= h_hat[i]) for (hs, h_hat) in zip(self.hidden_state_hists, self.info_outputs)])
-        self.info_loss *= 1e-7
+            self.info_loss = self.info_loss + tf.reduce_mean([tf.square(hs[i-1] - h_hat[i]) for (hs, h_hat) in zip(self.hidden_state_hists, self.info_outputs)])
+        #self.info_loss = self.info_loss * 1e-2
 
         self.task_loss = tf.reduce_mean([mask*tf.nn.softmax_cross_entropy_with_logits(logits = y, \
             labels = target, dim=1) for y, target, mask in zip(self.output, self.target_data, self.mask)])
@@ -430,6 +430,8 @@ class Slow_Model:
         # Gradient of the loss+aux function, in order to both perform training and to compute delta_weights
         #with tf.control_dependencies([self.task_loss, self.aux_loss, self.spike_loss_slow,self.entropy_loss ]):
         #    self.train_op = adam_optimizer.compute_gradients(self.task_loss + self.aux_loss + self.spike_loss_slow - self.entropy_loss)
+        print(self.info_loss)
+        print(self.task_loss)
         with tf.control_dependencies([self.task_loss, self.spike_loss_slow, self.info_loss, self.entropy_loss ]):
             self.train_op = adam_optimizer.compute_gradients(self.task_loss + self.spike_loss_slow + self.info_loss - self.entropy_loss)
 
