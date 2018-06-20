@@ -305,7 +305,7 @@ class Slow_Model:
             b_zs = []
             for i in range(par['num_layers_slow']):
                 W_z_ins.append(tf.get_variable('W_z_in'+str(i+1),initializer=par['W_z_in_inits'][i], trainable=True))
-                b_z_ins.append(tf.get_variable('b_z'+str(i+1),initializer=par['b_z_inits'][i], trainable=True))
+                b_zs.append(tf.get_variable('b_z'+str(i+1),initializer=par['b_z_inits'][i], trainable=True))
 
         with tf.variable_scope('info_out'):
             W_z_outs = []
@@ -382,7 +382,7 @@ class Slow_Model:
     def optimize(self):
 
         # Use all trainable variables, except those in the convolutional layers
-        self.variables = [var for var in tf.trainable_variables() if (not var.op.name.find('conv')==0 and (var.op.name.find('slow')==0 or var.op.name.find('info')==0)]
+        self.variables = [var for var in tf.trainable_variables() if (not var.op.name.find('conv')==0 and (var.op.name.find('slow')==0 or var.op.name.find('info')==0))]
         adam_optimizer = AdamOpt_Slow(self.variables, learning_rate = par['learning_rate'])
 
         previous_weights_mu_minus_1 = {}

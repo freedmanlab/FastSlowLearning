@@ -300,7 +300,7 @@ def update_dependencies():
 
     #par['W_out_init'] = np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_hidden'], par['n_output']]))
     par['W_out_init'] = np.float32(np.random.uniform(-c, c, size = [par['n_hidden'], par['n_output']]))
-    
+
     #par['W_in_init'] = np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_input'], par['n_hidden']]))
     #par['W_in_init'] = np.float32(np.random.uniform(-0.25, 0.25, size = [par['n_input'], par['n_hidden']]))
     par['W_in_init'] = c*np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_input'], par['n_hidden']]))
@@ -315,7 +315,7 @@ def update_dependencies():
     par['W_out_mask'] = np.ones((par['n_hidden'], par['n_output']), dtype=np.float32)
 
     par['W_in_mask'] = np.ones((par['n_input'], par['n_hidden']), dtype=np.float32)
-    
+
     if par['EI']:
         par['W_out_init'][par['ind_inh'], :] = 0
         par['W_out_mask'][par['ind_inh'], :] = 0
@@ -333,8 +333,8 @@ def update_dependencies():
     # INFO network
     if par['INFO']:
         par['W_z_in_inits'] = [c*np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_hidden'], par['n_z']]))] * par['num_layers_slow']
-        par['W_z_out_inits'] = [np.float32(np.random.uniform(-c, c, size = [par['n_info'], par['n_input']]))]
-        par['W_z_out_inits'] += [np.float32(np.random.uniform(-c, c, size = [par['n_info'], par['n_hidden']]))] * (par['num_layers_slow']-1)
+        par['W_z_out_inits'] = [np.float32(np.random.uniform(-c, c, size = [par['n_z'], par['n_input']]))]
+        par['W_z_out_inits'] += [np.float32(np.random.uniform(-c, c, size = [par['n_z'], par['n_hidden']]))] * (par['num_layers_slow']-1)
         par['b_z_inits'] = [np.zeros((1,par['n_z']), dtype = np.float32)] * par['num_layers_slow']
         par['b_z_out_inits'] = [np.zeros((1,par['n_input']), dtype = np.float32)]
         par['b_z_out_inits'] += [np.zeros((1,par['n_hidden']), dtype = np.float32)] * (par['num_layers_slow'] - 1)
