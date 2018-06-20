@@ -46,6 +46,7 @@ par = {
 
     # INFO network
     'INFO'                  : True,
+    'n_z'                   : 10,
 
     # Euclidean shape
     'num_sublayers'         : 1,
@@ -324,13 +325,19 @@ def update_dependencies():
         par['h_inits'] = [0.1*np.ones((par['batch_size'], par['n_hidden']), dtype=np.float32)] * par['num_layers_slow']
         par['W_rnn_inits'] = [np.float32(np.random.uniform(-c, c, size = [par['n_hidden'], par['n_hidden']]))] * par['num_layers_slow']
         par['W_in_slow_init'] = c*np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_input'], par['n_hidden']]))
+        par['W_t_inits'] = [c*np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_hidden'], par['n_hidden']]))] * (par['num_layers_slow'] - 1)
         par['W_out_slow_init'] = np.float32(np.random.uniform(-c, c, size = [par['n_hidden'], par['n_output']]))
         par['b_rnn_inits'] = [np.zeros((1,par['n_hidden']), dtype = np.float32)] * par['num_layers_slow']
         par['b_out_slow_init'] = np.zeros((1,par['n_output']), dtype = np.float32)
 
     # INFO network
     if par['INFO']:
-        par['W_t_inits'] = [c*np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_hidden'], par['n_hidden']]))] * (par['num_layers_slow'] - 1)
+        par['W_z_in_inits'] = [c*np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_hidden'], par['n_z']]))] * par['num_layers_slow']
+        par['W_z_out_inits'] = [np.float32(np.random.uniform(-c, c, size = [par['n_info'], par['n_input']]))]
+        par['W_z_out_inits'] += [np.float32(np.random.uniform(-c, c, size = [par['n_info'], par['n_hidden']]))] * (par['num_layers_slow']-1)
+        par['b_z_inits'] = [np.zeros((1,par['n_z']), dtype = np.float32)] * par['num_layers_slow']
+        par['b_z_out_inits'] = [np.zeros((1,par['n_input']), dtype = np.float32)]
+        par['b_z_out_inits'] += [np.zeros((1,par['n_hidden']), dtype = np.float32)] * (par['num_layers_slow'] - 1)
 
     # RL
     par['W_pol_out_init'] = np.float32(np.random.uniform(-c, c, size = [par['n_hidden'], par['n_pol']]))
