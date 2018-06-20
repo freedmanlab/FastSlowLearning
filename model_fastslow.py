@@ -276,6 +276,7 @@ class Slow_Model:
         self.output = []
         self.run_model()
 
+
         # Train the model
         self.optimize()
 
@@ -283,21 +284,22 @@ class Slow_Model:
     def run_model(self):
 
         with tf.variable_scope('slow_rnn'):
-            W_ins = []
+            W_in_slow = tf.get_variable('W_in_slow',initializer=par['W_in_slow_init'], trainable=True)
             W_rnns = []
             b_rnns = []
             for i in range(par['num_layers_slow']):
-                W_ins.append(tf.get_variable('W_in'+str(i+1),initializer=par['W_in_inits'][i], trainable=True))
                 W_rnns.append(tf.get_variable('W_rnn'+str(i+1),initializer=par['W_rnn_inits'][i], trainable=True))
                 b_rnns.append(tf.get_variable('b_rnn'+str(i+1),initializer=par['b_rnn_inits'][i], trainable=True))
 
-        with tf.variable_scope('slow_output'):
-            W_outs = []
-            b_outs = []
+        with tf.variable_scope('slow_transfer'):
+            W_ts = []
+            for i in range(par['num_layers_slow']-1):
+                W_ts.append(tf.get_variable('W_t'+str(i+1),initializer=par['W_t_inits'][i], trainable=True))
 
-            for i in range(par['num_layers_slow']):
-                W_outs.append(tf.get_variable('W_out'+str(i+1),initializer=par['W_out_inits'][i], trainable=True))
-                b_outs.append(tf.get_variable('b_out'+str(i+1),initializer=par['b_out_inits'][i], trainable=True))
+        with tf.variable_scope('slow_output'):
+            W_out_slow = tf.get_variable('W_out_slow',initializer=par['W_out_slow_init'], trainable=True)
+            b_out_slow = tf.get_variable('b_out_slow',initializer=par['b_out_slow_init'], trainable=True)
+
         '''
         with tf.variable_scope('info_in'):
             W_z_ins = []
@@ -319,8 +321,6 @@ class Slow_Model:
         hs = []
         for i in range(par['num_layers_slow']):
             hs.append(tf.constant(par['h_inits'][i]))
-
-        ys = [0]*par['num_layers_slow']
 
         syn_x = tf.constant(par['syn_x_init'])
         syn_u = tf.constant(par['syn_u_init'])
@@ -356,17 +356,14 @@ class Slow_Model:
 
 
             # Hidden State
-            hs[0] = self.gating*tf.nn.relu((1-par['alpha_neuron'])*hs[0] + par['alpha_neuron']*(tf.matmul(x, W_ins[0]) + \
+            hs[0] = self.gating*tf.nn.relu((1-par['alpha_neuron'])*hs[0] + par['alpha_neuron']*(tf.matmul(x, W_in_slow) + \
                 tf.matmul(hs[0], W_rnns[0]) + b_rnns[0]) + tf.random_normal(hs[0].shape, 0, par['noise_rnn'], dtype=tf.float32))
-            # Output State
-            ys[0] = tf.matmul(hs[0], W_outs[0]) + b_outs[0]
 
             for i in range(1,par['num_layers_slow']):
-                # Hidden State
-                hs[i] = self.gating*tf.nn.relu((1-par['alpha_neuron'])*hs[i] + par['alpha_neuron']*(tf.matmul(ys[i-1], W_ins[i]) + \
+                hs[i] = self.gating*tf.nn.relu((1-par['alpha_neuron'])*hs[i] + par['alpha_neuron']*(tf.matmul(hs[i-1], W_ts[i-1]) + \
                     tf.matmul(hs[i], W_rnns[i]) + b_rnns[i]) + tf.random_normal(hs[i].shape, 0, par['noise_rnn'], dtype=tf.float32))
-                # Output State
-                ys[i] = tf.matmul(hs[i], W_outs[i]) + b_outs[i]
+
+            y = tf.matmul(hs[-1], W_out_slow) + b_out_slow
 
             #h = tf.minimum(50., h)
             '''
@@ -381,7 +378,7 @@ class Slow_Model:
             self.syn_x_hist.append(syn_x)
             self.syn_u_hist.append(syn_u)
 
-            self.output.append(ys[par['num_layers_slow']-1])
+            self.output.append(y)
 
     def optimize(self):
 
