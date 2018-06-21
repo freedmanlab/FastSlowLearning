@@ -47,6 +47,7 @@ par = {
     # INFO network
     'INFO'                  : True,
     'n_z'                   : 10,
+    'alpha'                 : 1, #1e-2
 
     # Euclidean shape
     'num_sublayers'         : 1,
@@ -93,8 +94,8 @@ par = {
 
     # Training specs
     'batch_size'            : 256,
-    'n_train_batches'       : 100,
-    'n_train_batches_slow'  : 500,
+    'n_train_batches'       : 200,
+    'n_train_batches_slow'  : 3000,
 
     # Omega parameters
     'omega_c'               : 0.05,

@@ -409,7 +409,7 @@ class Slow_Model:
         self.info_loss = tf.reduce_mean([tf.square(x - h_hat[0]) for (x, h_hat) in zip(self.input_data, self.info_outputs)])
         for i in range(1,par['num_layers_slow']):
             self.info_loss = self.info_loss + tf.reduce_mean([tf.square(hs[i-1] - h_hat[i]) for (hs, h_hat) in zip(self.hidden_state_hists, self.info_outputs)])
-        #self.info_loss = self.info_loss * 1e-2
+        self.info_loss = self.info_loss * par['alpha']
 
         self.task_loss = tf.reduce_mean([mask*tf.nn.softmax_cross_entropy_with_logits(logits = y, \
             labels = target, dim=1) for y, target, mask in zip(self.output, self.target_data, self.mask)])
@@ -430,8 +430,6 @@ class Slow_Model:
         # Gradient of the loss+aux function, in order to both perform training and to compute delta_weights
         #with tf.control_dependencies([self.task_loss, self.aux_loss, self.spike_loss_slow,self.entropy_loss ]):
         #    self.train_op = adam_optimizer.compute_gradients(self.task_loss + self.aux_loss + self.spike_loss_slow - self.entropy_loss)
-        print(self.info_loss)
-        print(self.task_loss)
         with tf.control_dependencies([self.task_loss, self.spike_loss_slow, self.info_loss, self.entropy_loss ]):
             self.train_op = adam_optimizer.compute_gradients(self.task_loss + self.spike_loss_slow + self.info_loss - self.entropy_loss)
 
@@ -612,7 +610,7 @@ def main(save_fn=None, gpu_id = None):
                         model.entropy_loss, model.output], \
                         feed_dict = {x:stim_in, target:y_hat, gating:par['gating'][task], mask:mk})
 
-                if i%10 == 0:
+                if i%50 == 0:
                     acc = get_perf(y_hat, fast_output, mk)
                     print('Iter ', i, 'Task name ', name, ' accuracy', acc, ' loss ', loss, ' spike loss', spike_loss, \
                         ' entropy loss', ent_loss)
@@ -620,16 +618,17 @@ def main(save_fn=None, gpu_id = None):
 
             # Test all tasks at the end of each learning session
             num_reps = 10
+            acc = 0
             for (task_prime, r) in product(range(task+1), range(num_reps)):
 
                 # make batch of training data
                 name, stim_in, y_hat, mk, _ = stim.generate_trial(task_prime, training=False)
 
                 fast_output,_ = sess.run([model.output, model.syn_x_hist], feed_dict = {x:stim_in, gating:par['gating'][task_prime]})
-                acc = get_perf(y_hat, fast_output, mk)
+                acc += get_perf(y_hat, fast_output, mk)
                 accuracy_grid[task,task_prime] += acc/num_reps
 
-                print("Testing accuracy: ", acc)
+            print("Testing accuracy: ", acc/num_reps)
 
             # Update big omegaes, and reset other values before starting new task
             if par['stabilization'] == 'pathint':
@@ -727,16 +726,17 @@ def main(save_fn=None, gpu_id = None):
 
             # Test all tasks at the end of each learning session
             num_reps = 10
+            acc = 0
             for (task_prime, r) in product(range(task+1), range(num_reps)):
 
                 # make batch of training data
                 name, stim_in, y_hat, mk, _ = stim.generate_trial(task_prime, training=False)
 
                 output,_ = sess.run([slow_model.output, slow_model.syn_x_hist], feed_dict = {x:stim_in, gating:par['gating'][task_prime]})
-                acc = get_perf(y_hat, output, mk)
+                acc += get_perf(y_hat, output, mk)
                 accuracy_grid_slow[task,task_prime] += acc/num_reps
 
-                print("Testing accuracy: ", acc)
+            print("Testing accuracy: ", acc/num_reps)
 
             # Update big omegaes, and reset other values before starting new task
             if par['stabilization'] == 'pathint':
