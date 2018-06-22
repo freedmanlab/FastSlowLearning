@@ -30,7 +30,7 @@ par = {
     'num_motion_tuned'      : 64,
     'num_fix_tuned'         : 4,
     'num_rule_tuned'        : 0,
-    'n_hidden'              : 50,
+    'n_hidden'              : 250,
     'n_d_hidden'            : 100, # distill hidden neurons
     'n_val_hidden'          : 200,
     'n_dendrites'           : 1, # don't use for now
@@ -38,8 +38,8 @@ par = {
     'include_rule_signal'   : False,
 
     # SLOW network
-    'SLOW'                  : True,
-    'distillation'          : True,
+    'SLOW'                  : False,
+    'distillation'          : False,
     'training'              : True,
     'T'                     : 3,
     'num_layers_slow'       : 3,
@@ -48,6 +48,14 @@ par = {
     'INFO'                  : True,
     'n_z'                   : 10,
     'alpha'                 : 1, #1e-2
+
+    # Simple Feedforward
+    'n_neurons'             : 10,
+    'num_motion_dirs'       : 8,
+    'spatial_var'           : 1.0,
+    'motion_var'            : 1.0,
+    'num_layers_ff'         : 2,
+    'tol'                   : 0.05,
 
     # Euclidean shape
     'num_sublayers'         : 1,
@@ -76,7 +84,7 @@ par = {
     'dead_time'             : 200,
 
     # Tuning function data
-    'num_motion_dirs'       : 8,
+
     'tuning_height'         : 4.0,        # magnitude scaling factor for von Mises
     'kappa'                 : 2.0,        # concentration scaling factor for von Mises
 
@@ -94,7 +102,7 @@ par = {
 
     # Training specs
     'batch_size'            : 256,
-    'n_train_batches'       : 200,
+    'n_train_batches'       : 1000,
     'n_train_batches_slow'  : 3000,
 
     # Omega parameters
@@ -225,11 +233,11 @@ def update_dependencies():
         par['spike_cost'] = 0.
 
     # Number of output neurons
-    par['n_output'] = par['num_motion_dirs'] + 1
+    par['n_output'] = 2
     par['n_pol'] = par['num_motion_dirs'] + 1
 
     # Number of input neurons
-    par['n_input'] = par['num_motion_tuned'] + par['num_fix_tuned'] + par['num_rule_tuned']
+    par['n_input'] = par['n_neurons'] * par['n_neurons'] * (par['num_motion_dirs']+1)
 
     # General network shape
     par['shape'] = (par['n_input'], par['n_hidden'], par['n_output'])
@@ -320,6 +328,10 @@ def update_dependencies():
     if par['EI']:
         par['W_out_init'][par['ind_inh'], :] = 0
         par['W_out_mask'][par['ind_inh'], :] = 0
+
+    # FF network
+    par['W_l_inits'] = [c*np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_hidden'], par['n_hidden']]))] * (par['num_layers_ff'] - 1)
+    par['b_l_inits'] = [np.zeros((1,par['n_hidden']), dtype = np.float32)] * par['num_layers_ff']
 
     # SLOW network
     if par['SLOW']:
