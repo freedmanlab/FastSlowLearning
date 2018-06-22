@@ -10,14 +10,15 @@ class MultiStimulus:
     def __init__(self):
 
         # Shape configuration
-        self.input_shape    = [par['num_time_steps'], par['batch_size'],par['n_input'] ]
-        self.output_shape   = [par['num_time_steps'], par['batch_size'],par['n_output'] ]
+        self.input_shape    = [par['batch_size'],par['n_input'] ]
+        self.output_shape   = [par['batch_size'],par['n_output']]
+        '''
         self.stimulus_shape = [par['num_time_steps'], par['batch_size'],par['num_motion_tuned'] ]
         self.response_shape = [par['num_time_steps'], par['batch_size'],par['num_motion_dirs'] ]
         self.fixation_shape = [par['num_time_steps'], par['batch_size'],par['num_fix_tuned'] ]
         self.rule_shape = [par['num_time_steps'], par['batch_size'],par['num_rule_tuned'] ]
         self.mask_shape     = [par['num_time_steps'], par['batch_size']]
-
+        '''
         # Motion and stimulus configuration
         self.motion_dirs    = np.linspace(0,2*np.pi-2*np.pi/par['num_motion_dirs'],par['num_motion_dirs'])
         self.stimulus_dirs  = np.linspace(0,2*np.pi-2*np.pi/(par['num_motion_tuned']//2),(par['num_motion_tuned']//2))
