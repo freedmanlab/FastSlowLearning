@@ -59,6 +59,11 @@ par = {
     'subset_dirs'           : True,
     'subset_loc'            : False,
 
+    # Connected FF and Gen Model
+    'n_ys'                  : 256,
+    'n_connect'             : 30,
+    'n_latent'              : 16,
+
     # Euclidean shape
     'num_sublayers'         : 1,
     'neuron_dx'             : 1.0,
@@ -353,6 +358,12 @@ def update_dependencies():
         par['b_z_inits'] = [np.zeros((1,par['n_z']), dtype = np.float32)] * par['num_layers_slow']
         par['b_z_out_inits'] = [np.zeros((1,par['n_input']), dtype = np.float32)]
         par['b_z_out_inits'] += [np.zeros((1,par['n_hidden']), dtype = np.float32)] * (par['num_layers_slow'] - 1)
+
+    # CONNECTED network
+    par['W_conn_in_init'] = c*np.float32(np.random.gamma(shape=0.25, scale=1.0, size = [par['n_ys'], par['n_connect']]))
+    par['b_conn_init'] = np.zeros((1,par['n_connect']), dtype = np.float32)
+    par['W_conn_out_init'] = np.float32(np.random.uniform(-c, c, size = [par['n_connect'], par['n_latent']]))
+    par['b_conn_out_init'] = np.zeros((1,par['n_connect']), dtype = np.float32)
 
     # RL
     par['W_pol_out_init'] = np.float32(np.random.uniform(-c, c, size = [par['n_hidden'], par['n_pol']]))

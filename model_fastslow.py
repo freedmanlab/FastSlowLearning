@@ -21,13 +21,14 @@ os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
 ########################
 class Fast_Model:
 
-    def __init__(self, input_data, target_data):
+    def __init__(self, input_data, target_data, flag):
 
         # Load the input activity, the target data, and the training mask
         # for this batch of trials
         self.input_data         = input_data
         #self.gating             = tf.reshape(gating, [1,-1])
         self.target_data        = target_data
+        self.flag               = flag # 0 for FF, 1 for gFF, 2 for connection
         #self.mask               = tf.unstack(mask, axis=0)
         #self.W_ei               = tf.constant(par['EI_matrix'])
 
@@ -72,8 +73,13 @@ class Fast_Model:
 
     def optimize(self):
 
-        # Use all trainable variables, except those in the convolutional layers
-        self.variables = [var for var in tf.trainable_variables() if not var.op.name.find('conv')==0]
+        # Trainable variables for FF / Generative / Connection
+        if self.flag == 0: 
+            self.variables = [var for var in tf.trainable_variables() if var.op.name.find('ff')==0]
+        elif self.flag == 1:
+            self.variables = [var for var in tf.trainable_variables() if var.op.name.find('gen')==0]
+        else:
+            self.variables = [var for var in tf.trainable_variables() if var.op.name.find('conn')==0]
         adam_optimizer = AdamOpt(self.variables, learning_rate = par['learning_rate'])
 
         previous_weights_mu_minus_1 = {}
@@ -89,32 +95,30 @@ class Fast_Model:
             reset_prev_vars_ops.append( tf.assign(previous_weights_mu_minus_1[var.op.name], var ) )
 
         # self.aux_loss = tf.add_n(aux_losses)
-        self.loss = tf.reduce_mean([tf.square(y - y_hat) for (y, y_hat) in zip(tf.unstack(self.target_data,axis=0), tf.unstack(self.output, axis=0))])
+        if self.flag == 0:
+            self.ff_loss = tf.reduce_mean([tf.square(y - y_hat) for (y, y_hat) in zip(tf.unstack(self.target_data,axis=0), tf.unstack(self.task_output, axis=0))])
+            with tf.control_dependencies([self.ff_loss]):
+                self.train_op = adam_optimizer.compute_gradients(self.ff_loss)
 
+        elif self.flag == 1:
+            """
+            Define loss for generative model
+            """
+            # self.gen_loss = 
+            with tf.control_dependencies([self.loss]):
+                self.train_op = adam_optimizer.compute_gradients(self.gen_loss)
+        
+        else:
+            self.conn_loss = tf.reduce_mean([tf.square(x - x_hat) for (x, x_hat) in zip(tf.unstack(self.input_data,axis=0), tf.unstack(self.output, axis=0))])
+            with tf.control_dependencies([self.conn_loss]):
+                self.train_op = adam_optimizer.compute_gradients(self.conn_loss)
+        
 
-        """
-        with tf.variable_scope('rnn', reuse = True):
-            W_in  = tf.get_variable('W_in')
-            W_rnn = tf.get_variable('W_rnn')
-
-        active_weights_rnn = tf.matmul(tf.reshape(self.gating,[-1,1]), tf.reshape(self.gating,[1,-1]))
-        active_weights_in = tf.tile(tf.reshape(self.gating,[1,-1]),[par['n_input'], 1])
-        self.weight_loss = par['weight_cost']*(tf.reduce_mean(active_weights_in*W_in**2) + tf.reduce_mean(tf.nn.relu(active_weights_rnn*W_rnn)**2))
-        """
         # Gradient of the loss+aux function, in order to both perform training and to compute delta_weights
         #with tf.control_dependencies([self.task_loss, self.aux_loss, self.spike_loss_slow,self.entropy_loss ]):
         #    self.train_op = adam_optimizer.compute_gradients(self.task_loss + self.aux_loss + self.spike_loss_slow - self.entropy_loss)
-        with tf.control_dependencies([self.loss]):
-            self.train_op = adam_optimizer.compute_gradients(self.loss)
-
-        # Stabilizing weights
-        if par['stabilization'] == 'pathint':
-            # Zenke method
-            self.pathint_stabilization(adam_optimizer, previous_weights_mu_minus_1)
-
-        elif par['stabilization'] == 'EWC':
-            # Kirkpatrick method
-            self.EWC()
+        
+            
 
         self.reset_prev_vars = tf.group(*reset_prev_vars_ops)
         self.reset_adam_op = adam_optimizer.reset_params()
@@ -261,33 +265,37 @@ def main(save_fn=None, gpu_id = None):
 
         for task in range(0,par['n_tasks']):
 
+            """ Training FF Model """
             for i in range(par['n_train_batches']):
 
                 # make batch of training data
                 name, stim_real, stim_in, y_hat = stim.generate_trial(task, subset_dirs=par['subset_dirs'], subset_loc=par['subset_loc'])
 
-                if par['stabilization'] == 'pathint':
-                    _, _, loss, AL, spike_loss, ent_loss, fast_output = sess.run([model.train_op, \
-                        model.update_small_omega, model.task_loss, model.aux_loss, model.spike_loss, \
-                        model.entropy_loss, model.output], \
-                        feed_dict = {x:stim_in, target:y_hat})
-                    sess.run([model.reset_rnn_weights])
-                    if loss < 0.005 and AL < 0.0004 + 0.0002*task:
-                        break
-
-                elif par['stabilization'] == 'EWC':
-                    _, loss, AL = sess.run([model.train_op, model.task_loss, model.aux_loss], feed_dict = \
-                        {x:stim_in, target:y_hat, gating:par['gating'][task], mask:mk})
-
-                else:
-                     _, loss, fast_output = sess.run([model.train_op, \
-                        model.loss, model.output], \
-                        feed_dict = {x:stim_in, target:y_hat})
+                # 0 for training FF, 1 for training connection, 2 for gFF
+                 _, ff_loss, task_output = sess.run([model.train_op, model.ff_loss, model.task_output], \
+                    feed_dict = {x:stim_in, target:y_hat, flag:0})
 
                 if i%50 == 0:
-                    acc = get_perf(y_hat, fast_output)
-                    print('Iter ', i, 'Task name ', name, ' accuracy', acc, ' loss ', loss)
+                    acc = get_perf(y_hat, task_output)
+                    print('Iter ', i, 'Task name ', name, ' accuracy', acc, ' loss ', ff_loss)
 
+            """
+            Training Generative Model -- use flag == 1
+            """
+
+            """ Training Connections """
+            for i in range(par['n_train_batches']):
+
+                # make batch of training data
+                name, stim_real, stim_in, y_hat = stim.generate_trial(task, subset_dirs=par['subset_dirs'], subset_loc=par['subset_loc'])
+
+                # 0 for training FF, 1 for training gFF, 2 for connection
+                 _, conn_loss, output = sess.run([model.train_op, model.conn_loss, model.output], \
+                    feed_dict = {x:stim_in, target:y_hat, flag:2})
+
+                if i%50 == 0:
+                    acc = get_perf(stim_in, output)
+                    print('Iter ', i, 'Task name ', name, ' accuracy', acc, ' loss ', conn_loss)
 
             # Test all tasks at the end of each learning session
             num_reps = 10
@@ -298,11 +306,11 @@ def main(save_fn=None, gpu_id = None):
             if par['subset_dirs']:
                 grid_dirs = np.zeros((1,par['num_motion_dirs']+1), dtype=np.float32)
                 counter_dirs = np.zeros((1,par['num_motion_dirs']+1), dtype=np.int32)
+            
             for (task_prime, r) in product(range(task+1), range(num_reps)):
-
                 # make batch of training data
                 name, stim_real, stim_in, y_hat = stim.generate_trial(task_prime, subset_dirs=False, subset_loc=False)
-                fast_output = sess.run(model.output, feed_dict = {x:stim_in})
+                fast_output = sess.run(model.output, feed_dict = {x:stim_in, target:1})
 
                 if par['subset_loc']:
                     grid_loc, counter_loc = heat_map(stim_real, y_hat, fast_output, grid_loc, counter_loc,loc=True)
@@ -343,118 +351,9 @@ def main(save_fn=None, gpu_id = None):
                             'accuracy_grid': accuracy_grid, 'big_omegas': big_omegas, 'par': par}
             pickle.dump(save_results, open(par['save_dir'] + save_fn, 'wb'))
 
-        print('\nFast Model execution complete.\n')
-
-        """# Slow network session
-        # sess.run(tf.global_variables_initializer())
-        sess.run(slow_model.reset_prev_vars)
-
-        for task in range(0,par['n_tasks']):
-
-            for i in range(par['n_train_batches_slow']):
-
-                # make batch of training data
-                name, stim_in, y_hat, mk, _ = stim.generate_trial(task, training=True)
-
-                if par['distillation']:
-                    # getting fast output from the trained fast network
-                    fast_output,_ = sess.run([model.output, model.syn_x_hist], feed_dict = {x:stim_in, gating:par['gating'][task_prime]})
-                    fast_output = softmax(np.array(fast_output))
-
-                    if par['stabilization'] == 'pathint':
-                        _, _, loss, AL, spike_loss_slow, ent_loss, output = sess.run([slow_model.train_op, \
-                            slow_model.update_small_omega, slow_model.task_loss, slow_model.aux_loss, slow_model.spike_loss_slow, \
-                            slow_model.entropy_loss, slow_model.output], \
-                            feed_dict = {x:stim_in, target:fast_output, gating:par['gating'][task], mask:mk})
-                        sess.run([slow_model.reset_rnn_weights])
-                        if loss < 0.005 and AL < 0.0004 + 0.0002*task:
-                            break
-
-                    elif par['stabilization'] == 'EWC':
-                        _, loss, AL = sess.run([slow_model.train_op, slow_model.task_loss, slow_model.aux_loss], feed_dict = \
-                            {x:stim_in, target:fast_output, gating:par['gating'][task], mask:mk})
-
-                    else:
-                         _, loss, spike_loss_slow, info_loss, ent_loss, output = sess.run([slow_model.train_op, \
-                            slow_model.task_loss, slow_model.spike_loss_slow, slow_model.info_loss,\
-                            slow_model.entropy_loss, slow_model.output], \
-                            feed_dict = {x:stim_in, target:fast_output, gating:par['gating'][task], mask:mk})
-
-                    if i%100 == 0:
-                        acc = get_perf(y_hat, output, mk)
-                        print('Iter ', i, 'Task name ', name, 'accuracy', acc, ' loss ', loss,  'spike loss', spike_loss_slow, \
-                            ' info_loss', info_loss, ' entropy loss', ent_loss)
-
-                else:
-                    if par['stabilization'] == 'pathint':
-                        _, _, loss, AL, spike_loss_slow, ent_loss, output = sess.run([slow_model.train_op, \
-                            slow_model.update_small_omega, slow_model.task_loss, slow_model.aux_loss, slow_model.spike_loss_slow, \
-                            slow_model.entropy_loss, slow_model.output], \
-                            feed_dict = {x:stim_in, target:y_hat, gating:par['gating'][task], mask:mk})
-                        sess.run([slow_model.reset_rnn_weights])
-                        if loss < 0.005 and AL < 0.0004 + 0.0002*task:
-                            break
-
-                    elif par['stabilization'] == 'EWC':
-                        _, loss, AL = sess.run([slow_model.train_op, slow_model.task_loss, slow_model.aux_loss], feed_dict = \
-                            {x:stim_in, target:y_hat, gating:par['gating'][task], mask:mk})
-
-                    else:
-                         _, loss, spike_loss_slow, ent_loss, output = sess.run([slow_model.train_op, \
-                            slow_model.task_loss, slow_model.spike_loss_slow, \
-                            slow_model.entropy_loss, slow_model.output], \
-                            feed_dict = {x:stim_in, target:y_hat, gating:par['gating'][task], mask:mk})
-
-                    if i%100 == 0:
-                        acc = get_perf(y_hat, output, mk)
-                        print('Iter ', i, 'Task name ', name, ' accuracy', acc, ' loss ', loss,  'spike loss', spike_loss_slow, \
-                            ' entropy loss', ent_loss)
-
-            # Test all tasks at the end of each learning session
-            num_reps = 10
-            acc = 0
-            for (task_prime, r) in product(range(task+1), range(num_reps)):
-
-                # make batch of training data
-                name, stim_in, y_hat, mk, _ = stim.generate_trial(task_prime, training=False)
-
-                output,_ = sess.run([slow_model.output, slow_model.syn_x_hist], feed_dict = {x:stim_in, gating:par['gating'][task_prime]})
-                acc += get_perf(y_hat, output, mk)
-                accuracy_grid_slow[task,task_prime] += acc/num_reps
-
-            print("Testing accuracy: ", acc/num_reps)
-
-            # Update big omegaes, and reset other values before starting new task
-            if par['stabilization'] == 'pathint':
-                big_omegas = sess.run([slow_model.update_big_omega, slow_model.big_omega_var])
-            elif par['stabilization'] == 'EWC':
-                for n in range(par['EWC_fisher_num_batches']):
-                    name, stim_in, y_hat, mk, _ = stim.generate_trial(task)
-                    big_omegas = sess.run([slow_model.update_big_omega,slow_model.big_omega_var], feed_dict = \
-                        {x:stim_in, target:y_hat, gating:par['gating'][task], mask:mk})
+        print('\nModel execution complete.\n')
 
 
-
-            # Reset the Adam Optimizer, and set the previous parater values to their current values
-            sess.run(slow_model.reset_adam_op)
-            sess.run(slow_model.reset_prev_vars)
-            if par['stabilization'] == 'pathint':
-                sess.run(slow_model.reset_small_omega)
-
-            # reset weights between tasks if called upon
-            if par['reset_weights']:
-                sess.run(slow_model.reset_weights)
-
-
-
-
-        if par['save_analysis']:
-            save_results = {'task': task, 'accuracy': accuracy, 'accuracy_full': accuracy_full, \
-                            'accuracy_grid': accuracy_grid_slow, 'big_omegas': big_omegas, 'par': par}
-            pickle.dump(save_results, open(par['save_dir'] + save_fn, 'wb'))
-
-    print('\nSlow Model execution complete.')
-"""
 def softmax(x):
     temp = np.exp(x/par['T'])
     s = [np.sum(temp, axis=2) for i in range(par['n_output'])]
