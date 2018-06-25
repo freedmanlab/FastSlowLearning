@@ -145,15 +145,13 @@ class MultiStimulus:
 
             resp = np.zeros([par['num_motion_dirs']+1, par['n_neurons'], par['n_neurons']])
             for mn in range(par['num_motion_dirs']+1):
-                for xn in range(par['n_neurons']):
-                    for yn in range(par['n_neurons']):
-                        spatial = np.exp(-1/2 * (np.square(x - xn) + np.square(y - yn)))
-                        if mn == par['num_motion_dirs']:
-                            resp[mn,xn,yn] = spatial * (1-m)
-                        else:
-                            ang_dist = np.angle(np.exp(1j*dir - 1j*self.motion_dirs[mn]))
-                            motion = np.exp(-1/2 * np.square(ang_dist))
-                            resp[mn,xn,yn] = motion * spatial * m
+                spatial = np.exp(-1/2 * (np.square(x - np.transpose(np.array([np.arange(par['n_neurons'])]*par['n_neurons']))) + np.square(y - np.array([np.arange(par['n_neurons'])]*par['n_neurons']))))
+                if mn == par['num_motion_dirs']:
+                    resp[mn,:,:] = spatial * (1-m)
+                else:
+                    ang_dist = np.angle(np.exp(1j*dir - 1j*self.motion_dirs[mn]))
+                    motion = np.exp(-1/2 * np.square(ang_dist))
+                    resp[mn,:,:] = motion * spatial * m
 
             self.trial_info['neural_input'][b] = np.reshape(resp, (1,-1))
             self.trial_info['desired_output'][b] = np.array([np.cos(dir), np.sin(dir)])*m
