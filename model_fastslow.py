@@ -264,7 +264,7 @@ def main(save_fn=None, gpu_id = None):
             for i in range(par['n_train_batches']):
 
                 # make batch of training data
-                name, stim_in, y_hat = stim.generate_trial(task, training=True)
+                name, stim_real, stim_in, y_hat = stim.generate_trial(task, subset_dirs=False, subset_loc=True)
 
                 if par['stabilization'] == 'pathint':
                     _, _, loss, AL, spike_loss, ent_loss, fast_output = sess.run([model.train_op, \
@@ -292,17 +292,23 @@ def main(save_fn=None, gpu_id = None):
             # Test all tasks at the end of each learning session
             num_reps = 10
             acc = 0
+            grid = np.zeros((par['n_neurons'],par['n_neurons']), dtype=np.float32)
+            counter = np.zeros((par['n_neurons'],par['n_neurons']), dtype=np.int8)
             for (task_prime, r) in product(range(task+1), range(num_reps)):
 
                 # make batch of training data
-                name, stim_in, y_hat = stim.generate_trial(task_prime, training=False)
+                name, stim_real, stim_in, y_hat = stim.generate_trial(task_prime, subset_dirs=False, subset_loc=False)
 
-                fast_output = sess.run([model.output], feed_dict = {x:stim_in})
+                fast_output = sess.run(model.output, feed_dict = {x:stim_in})
+                grid, counter = heat_map(stim_real, y_hat, fast_output, grid, counter)
                 acc += get_perf(y_hat, fast_output)
-                accuracy_grid[task,task_prime] += acc/num_reps
 
             print("Testing accuracy: ", acc/num_reps)
-
+            counter[counter == 0] = 1
+            plt.imshow(grid/counter, cmap='inferno')
+            plt.colorbar()
+            plt.clim(0,1)
+            plt.show()
 
             # Reset the Adam Optimizer, and set the previous parater values to their current values
             sess.run(model.reset_adam_op)
@@ -322,7 +328,7 @@ def main(save_fn=None, gpu_id = None):
                             'accuracy_grid': accuracy_grid, 'big_omegas': big_omegas, 'par': par}
             pickle.dump(save_results, open(par['save_dir'] + save_fn, 'wb'))
 
-        print('\nFast Model execution complete.')
+        print('\nFast Model execution complete.\n')
 
         """# Slow network session
         # sess.run(tf.global_variables_initializer())
@@ -439,6 +445,25 @@ def softmax(x):
     s = [np.sum(temp, axis=2) for i in range(par['n_output'])]
     return temp / np.stack(s, axis=2)
     #return np.divide(temp, np.stack(np.sum(temp, axis=2)))
+
+def heat_map(input, target, output, grid, counter):
+    # grid = np.zeros((par['n_neurons'],par['n_neurons']), dtype=np.float32)
+    # counter = np.zeros((par['n_neurons'],par['n_neurons']), dtype=np.int8)
+
+    for b in range(par['batch_size']):
+        x, y, dir, m = input[b]
+        if m != 0:
+            counter[int(x), int(y)] += 1
+            if ((np.absolute(target[b,0] - output[b,0]) < par['tol']) and (np.absolute(target[b,1] - output[b,1]) < par['tol'])):
+                grid[int(x),int(y)] += 1
+            # print("Grid: ", grid[int(x),int(y)])
+            # print("Counter: ", counter[int(x), int(y)])
+            # print("%: ", grid[int(x),int(y)]/counter[int(x),int(y)])
+
+    # print(grd)
+    # print(counter)
+    # print(grid/counter)
+    return grid, counter
 
 def get_perf(target, output):
 

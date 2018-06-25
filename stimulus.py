@@ -113,9 +113,10 @@ class MultiStimulus:
         return self.task_types
 
 
-    def generate_trial(self, current_task, training):
+    def generate_trial(self, current_task, subset_dirs, subset_loc):
 
         self.trial_info = {
+            'input'          : np.zeros([par['batch_size'], 4]),
             'neural_input'   : np.random.normal(par['input_mean'], par['noise_in'], size=self.input_shape),
             'desired_output' : np.zeros(self.output_shape, dtype=np.float32),
             }
@@ -128,19 +129,24 @@ class MultiStimulus:
             self.trial_info['neural_input'][:, :, -par['num_rule_tuned']:] += rule_signal*self.rule_signal_factor
 
         task = self.task_types[current_task]    # Selects a task from the list
-        task[0](*task[1:], training)                      # Generates that task into trial_info
+        task[0](*task[1:], subset_dirs, subset_loc)                      # Generates that task into trial_info
         # Returns the trial info and the task name
 
         # give -1 for breaking fixation, -0.01/+2 for choosing incorrectly/correctly
 
-        return task[1], self.trial_info['neural_input'], self.trial_info['desired_output']
+        return task[1], self.trial_info['input'], self.trial_info['neural_input'], self.trial_info['desired_output']
 
-    def task_go(self, variant='go', offset=0, training=True):
+    def task_go(self, variant='go', offset=0, subset_dirs=False, subset_loc=True):
 
         for b in range(par['batch_size']):
-            x = np.random.randint(par['n_neurons'])
-            y = np.random.randint(par['n_neurons'])
-            dir = np.random.choice(self.motion_dirs)
+            if subset_loc:
+                x = np.random.randint(2,par['n_neurons'])
+                y = np.random.randint(2,par['n_neurons'])
+            else:
+                x = np.random.randint(par['n_neurons'])
+                y = np.random.randint(par['n_neurons'])
+
+            dir = np.random.choice(self.motion_dirs[1:]) if subset_dirs else np.random.choice(self.motion_dirs)
             m = np.random.randint(2)
 
             resp = np.zeros([par['num_motion_dirs']+1, par['n_neurons'], par['n_neurons']])
@@ -153,6 +159,7 @@ class MultiStimulus:
                     motion = np.exp(-1/2 * np.square(ang_dist))
                     resp[mn,:,:] = motion * spatial * m
 
+            self.trial_info['input'][b] = np.array([x, y, dir, m])
             self.trial_info['neural_input'][b] = np.reshape(resp, (1,-1))
             self.trial_info['desired_output'][b] = np.array([np.cos(dir), np.sin(dir)])*m
 
