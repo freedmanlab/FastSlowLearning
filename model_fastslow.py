@@ -297,7 +297,7 @@ def main(save_fn=None, gpu_id = None):
                 # make batch of training data
                 name, stim_in, y_hat = stim.generate_trial(task_prime, training=False)
 
-                fast_output,_ = sess.run([model.output], feed_dict = {x:stim_in})
+                fast_output = sess.run([model.output], feed_dict = {x:stim_in})
                 acc += get_perf(y_hat, fast_output)
                 accuracy_grid[task,task_prime] += acc/num_reps
 
