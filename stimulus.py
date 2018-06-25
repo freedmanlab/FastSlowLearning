@@ -136,7 +136,7 @@ class MultiStimulus:
 
         return task[1], self.trial_info['input'], self.trial_info['neural_input'], self.trial_info['desired_output']
 
-    def task_go(self, variant='go', offset=0, subset_dirs=False, subset_loc=True):
+    def task_go(self, variant='go', offset=0, subset_dirs=False, subset_loc=False):
 
         for b in range(par['batch_size']):
             if subset_loc:
