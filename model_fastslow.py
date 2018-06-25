@@ -59,16 +59,33 @@ class Fast_Model:
             W_out = tf.get_variable('W_out',initializer=par['W_out_init'], trainable=True)
             b_out = tf.get_variable('b_out',initializer=par['b_out_init'], trainable=True)
 
-        if par['EI']:
-            W_rnn = tf.matmul(self.W_ei, tf.nn.relu(W_rnn))
+        with tf.variable_scope('conn_in'):
+            W_conn_in = tf.get_variable('W_conn_in', initializer=par['W_conn_in_init'], trainable=True)
+            b_conn = tf.get_variable('b_conn', initializer=par['b_conn_init'], trainable=True)
+
+        with tf.variable_scope('conn_out'):
+            W_conn_out = tf.get_variable('W_conn_out', initializer=par['W_conn_out_init'], trainable=True)
+            b_conn_out = tf.get_variable('b_conn_out', initializer=par['b_conn_out_init'], trainable=True)
+
+        '''
+        variable scope for generative FF model
+        '''
 
         ls = [tf.nn.relu(tf.matmul(self.input_data, W_in) + b_ls[0])]
         for i in range(1,par['num_layers_ff']):
             ls.append(tf.nn.relu(tf.matmul(ls[i-1], W_ls[i-1]) + b_ls[i]))
 
         y = tf.matmul(ls[-1], W_out) + b_out
+        self.task_output = y
 
-        self.output = y
+        ys = y
+        connect_layer = tf.nn.relu(tf.matmul(ys, W_conn_in) + b_conn)
+        ys_out = tf.matmul(connect_layer, W_conn_out) + b_conn_out
+
+        '''
+        architecture for generative FF model
+        '''
+
 
     def optimize(self):
 
