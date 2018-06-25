@@ -30,7 +30,7 @@ par = {
     'num_motion_tuned'      : 64,
     'num_fix_tuned'         : 4,
     'num_rule_tuned'        : 0,
-    'n_hidden'              : 250,
+    'n_hidden'              : 40,
     'n_d_hidden'            : 100, # distill hidden neurons
     'n_val_hidden'          : 200,
     'n_dendrites'           : 1, # don't use for now

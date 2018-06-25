@@ -447,7 +447,7 @@ def get_perf(target, output):
     only examine time points when test stimulus is on
     in another words, when target[:,:,-1] is not 0
     """
-    return np.sum(np.float32(((target[:,0] - output[:,0]) < par['tol']) * ((target[:,1] - output[:,1]) < par['tol'])))/par['batch_size']
+    return np.sum(np.float32((np.absolute(target[:,0] - output[:,0]) < par['tol']) * (np.absolute(target[:,1] - output[:,1]) < par['tol'])))/par['batch_size']
 
     #return np.sum([np.float32((t[0] - o[0]) < tol and (t[1] - o[1]) < tol) for (t, o) in zip(target, output)]/par['batch_size']
 
