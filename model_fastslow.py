@@ -44,10 +44,10 @@ class Fast_Model:
 
     def run_model(self):
 
-        with tf.variable_scope('rnn'):
+        with tf.variable_scope('ff_in'):
             W_in = tf.get_variable('W_in',initializer=par['W_in_init'], trainable=True)
 
-        with tf.variable_scope('transfer'):
+        with tf.variable_scope('ff_transfer'):
             W_ls = []
             b_ls = []
             for i in range(par['num_layers_ff']-1):
@@ -55,7 +55,7 @@ class Fast_Model:
             for i in range(par['num_layers_ff']):
                 b_ls.append(tf.get_variable('b_l'+str(i+1),initializer=par['b_l_inits'][i], trainable=True))
 
-        with tf.variable_scope('output'):
+        with tf.variable_scope('ff_output'):
             W_out = tf.get_variable('W_out',initializer=par['W_out_init'], trainable=True)
             b_out = tf.get_variable('b_out',initializer=par['b_out_init'], trainable=True)
 
@@ -264,7 +264,7 @@ def main(save_fn=None, gpu_id = None):
             for i in range(par['n_train_batches']):
 
                 # make batch of training data
-                name, stim_real, stim_in, y_hat = stim.generate_trial(task, subset_dirs=False, subset_loc=True)
+                name, stim_real, stim_in, y_hat = stim.generate_trial(task, subset_dirs=par['subset_dirs'], subset_loc=par['subset_loc'])
 
                 if par['stabilization'] == 'pathint':
                     _, _, loss, AL, spike_loss, ent_loss, fast_output = sess.run([model.train_op, \
@@ -292,23 +292,38 @@ def main(save_fn=None, gpu_id = None):
             # Test all tasks at the end of each learning session
             num_reps = 10
             acc = 0
-            grid = np.zeros((par['n_neurons'],par['n_neurons']), dtype=np.float32)
-            counter = np.zeros((par['n_neurons'],par['n_neurons']), dtype=np.int8)
+            if par['subset_loc']:
+                grid_loc = np.zeros((par['n_neurons'],par['n_neurons']), dtype=np.float32)
+                counter_loc = np.zeros((par['n_neurons'],par['n_neurons']), dtype=np.int32)
+            if par['subset_dirs']:
+                grid_dirs = np.zeros((1,par['num_motion_dirs']+1), dtype=np.float32)
+                counter_dirs = np.zeros((1,par['num_motion_dirs']+1), dtype=np.int32)
             for (task_prime, r) in product(range(task+1), range(num_reps)):
 
                 # make batch of training data
                 name, stim_real, stim_in, y_hat = stim.generate_trial(task_prime, subset_dirs=False, subset_loc=False)
-
                 fast_output = sess.run(model.output, feed_dict = {x:stim_in})
-                grid, counter = heat_map(stim_real, y_hat, fast_output, grid, counter)
+
+                if par['subset_loc']:
+                    grid_loc, counter_loc = heat_map(stim_real, y_hat, fast_output, grid_loc, counter_loc,loc=True)
+                if par['subset_dirs']:
+                    grid_dirs, counter_dirs = heat_map(stim_real, y_hat, fast_output, grid_dirs, counter_dirs,loc=False)
                 acc += get_perf(y_hat, fast_output)
 
             print("Testing accuracy: ", acc/num_reps)
-            counter[counter == 0] = 1
-            plt.imshow(grid/counter, cmap='inferno')
-            plt.colorbar()
-            plt.clim(0,1)
-            plt.show()
+
+            if par['subset_loc']:
+                counter_loc[counter_loc == 0] = 1
+                plt.imshow(grid_loc/counter_loc, cmap='inferno')
+                plt.colorbar()
+                plt.clim(0,1)
+                plt.show()
+            if par['subset_dirs']:
+                counter_dirs[counter_dirs == 0] = 1
+                plt.imshow(grid_dirs/counter_dirs, cmap='inferno')
+                plt.colorbar()
+                plt.clim(0,1)
+                plt.show()
 
             # Reset the Adam Optimizer, and set the previous parater values to their current values
             sess.run(model.reset_adam_op)
@@ -446,23 +461,22 @@ def softmax(x):
     return temp / np.stack(s, axis=2)
     #return np.divide(temp, np.stack(np.sum(temp, axis=2)))
 
-def heat_map(input, target, output, grid, counter):
-    # grid = np.zeros((par['n_neurons'],par['n_neurons']), dtype=np.float32)
-    # counter = np.zeros((par['n_neurons'],par['n_neurons']), dtype=np.int8)
+def heat_map(input, target, output, grid, counter,loc=True):
 
     for b in range(par['batch_size']):
         x, y, dir, m = input[b]
         if m != 0:
-            counter[int(x), int(y)] += 1
-            if ((np.absolute(target[b,0] - output[b,0]) < par['tol']) and (np.absolute(target[b,1] - output[b,1]) < par['tol'])):
-                grid[int(x),int(y)] += 1
-            # print("Grid: ", grid[int(x),int(y)])
-            # print("Counter: ", counter[int(x), int(y)])
-            # print("%: ", grid[int(x),int(y)]/counter[int(x),int(y)])
+            if loc:
+                counter[int(x), int(y)] += 1
+            else:
+                counter[0,int(dir)] += 1
 
-    # print(grd)
-    # print(counter)
-    # print(grid/counter)
+            if ((np.absolute(target[b,0] - output[b,0]) < par['tol']) and (np.absolute(target[b,1] - output[b,1]) < par['tol'])):
+                if loc:
+                    grid[int(x),int(y)] += 1
+                else:
+                    grid[0,int(dir)] += 1
+
     return grid, counter
 
 def get_perf(target, output):
