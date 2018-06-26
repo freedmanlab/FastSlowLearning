@@ -56,6 +56,8 @@ par = {
     'motion_var'            : 1.0,
     'num_layers_ff'         : 2,
     'tol'                   : 0.01,
+    'subset_dirs'           : True,
+    'subset_loc'            : False,
 
     # Euclidean shape
     'num_sublayers'         : 1,
