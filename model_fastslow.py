@@ -16,18 +16,18 @@ os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID" # so the IDs match nvidia-smi
 # Ignore startup TensorFlow warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
 
-########################
-### Fast Model setup ###
-########################
-class Fast_Model:
+###################
+### Model setup ###
+###################
+class Model:
 
-    def __init__(self, input_data, target_data, flag):
+    def __init__(self, x, y, ys, flag):
 
         # Load the input activity, the target data, and the training mask
         # for this batch of trials
-        self.input_data         = input_data
-        #self.gating             = tf.reshape(gating, [1,-1])
-        self.target_data        = target_data
+        self.x_data             = x
+        self.y_data             = y
+        self.ys_data            = ys
         self.flag               = flag # 0 for FF, 1 for gFF, 2 for connection
         #self.mask               = tf.unstack(mask, axis=0)
         #self.W_ei               = tf.constant(par['EI_matrix'])
@@ -42,6 +42,18 @@ class Fast_Model:
         # Train the model
         self.optimize()
 
+    def run_FF(self):
+        ls = [tf.nn.relu(tf.matmul(self.x_data, W_in) + b_ls[0])]
+        for i in range(1,par['num_layers_ff']):
+            ls.append(tf.nn.relu(tf.matmul(ls[i-1], W_ls[i-1]) + b_ls[i]))
+
+        self.ff_output = tf.matmul(ls[-1], W_out) + b_out
+
+    def run_gFF(self):
+        '''
+        architecture for generative FF model
+        '''
+    
 
     def run_model(self):
 
@@ -72,20 +84,18 @@ class Fast_Model:
         variable scope for generative FF model
         '''
 
-        ls = [tf.nn.relu(tf.matmul(self.input_data, W_in) + b_ls[0])]
-        for i in range(1,par['num_layers_ff']):
-            ls.append(tf.nn.relu(tf.matmul(ls[i-1], W_ls[i-1]) + b_ls[i]))
+        """ Call training functions """
+        if self.flag == 0:
+            self.run_FF()
+        elif self.flag == 1:
+            self.run_gFF()
+        else:
+            # generative model stuff
+            # ys -> connection -> gFF -> FF -> y_hat
+            connect_layer = tf.nn.relu(tf.matmul(self.ys_data, W_conn_in) + b_conn)
+            self.conn_output = tf.matmul(connect_layer, W_conn_out) + b_conn_out
 
-        y = tf.matmul(ls[-1], W_out) + b_out
-        self.task_output = y
-
-        ys = y
-        connect_layer = tf.nn.relu(tf.matmul(ys, W_conn_in) + b_conn)
-        ys_out = tf.matmul(connect_layer, W_conn_out) + b_conn_out
-
-        '''
-        architecture for generative FF model
-        '''
+        
 
 
     def optimize(self):
@@ -113,7 +123,7 @@ class Fast_Model:
 
         # self.aux_loss = tf.add_n(aux_losses)
         if self.flag == 0:
-            self.ff_loss = tf.reduce_mean([tf.square(y - y_hat) for (y, y_hat) in zip(tf.unstack(self.target_data,axis=0), tf.unstack(self.task_output, axis=0))])
+            self.ff_loss = tf.reduce_mean([tf.square(y - y_hat) for (y, y_hat) in zip(tf.unstack(self.y_data,axis=0), tf.unstack(self.ff_output, axis=0))])
             with tf.control_dependencies([self.ff_loss]):
                 self.train_op = adam_optimizer.compute_gradients(self.ff_loss)
 
@@ -122,11 +132,11 @@ class Fast_Model:
             Define loss for generative model
             """
             # self.gen_loss = 
-            with tf.control_dependencies([self.loss]):
+            with tf.control_dependencies([self.gen_loss]):
                 self.train_op = adam_optimizer.compute_gradients(self.gen_loss)
         
         else:
-            self.conn_loss = tf.reduce_mean([tf.square(x - x_hat) for (x, x_hat) in zip(tf.unstack(self.input_data,axis=0), tf.unstack(self.output, axis=0))])
+            self.conn_loss = tf.reduce_mean([tf.square(ys - ys_hat) for (ys, ys_hat) in zip(tf.unstack(self.ys_data,axis=0), tf.unstack(self.conn_output, axis=0))])
             with tf.control_dependencies([self.conn_loss]):
                 self.train_op = adam_optimizer.compute_gradients(self.conn_loss)
         
@@ -235,23 +245,15 @@ def main(save_fn=None, gpu_id = None):
     if gpu_id is not None:
         os.environ["CUDA_VISIBLE_DEVICES"] = gpu_id
 
-    # train the convolutional layers with the CIFAR-10 dataset
-    # otherwise, it will load the convolutional weights from the saved file
-    if (par['task'] == 'cifar' or par['task'] == 'imagenet') and par['train_convolutional_layers']:
-        convolutional_layers.ConvolutionalLayers()
-
     print('\nRunning model.\n')
 
     # Reset TensorFlow graph
     tf.reset_default_graph()
 
     # Create placeholders for the model
-    # input_data, target_data, gating, mask
-
     x  = tf.placeholder(tf.float32, [par['batch_size'], par['n_input']], 'stim')
     target   = tf.placeholder(tf.float32, [par['batch_size'], par['n_output']], 'out')
-    #mask   = tf.placeholder(tf.float32, [par['num_time_steps'], par['batch_size']], 'mask')
-    #gating = tf.placeholder(tf.float32, [par['n_hidden']], 'gating')
+    ys = tf.placeholder(tf.float32, [par['batch_size'], par['n_ys']], 'stim_y')
 
     stim = stimulus.MultiStimulus()
     accuracy_full = []
@@ -268,13 +270,12 @@ def main(save_fn=None, gpu_id = None):
     config = tf.ConfigProto()
     #config.gpu_options.allow_growth = True
 
-    # Fast Model run session
+    # Model run session
     with tf.Session(config=config) as sess:
 
         device = '/cpu:0' if gpu_id is None else '/gpu:0'
         with tf.device(device):
-            model = Fast_Model(x, target)
-            #slow_model = Slow_Model(x, target, gating, mask)
+            model = Model(x, target, ys)
 
         sess.run(tf.global_variables_initializer())
         t_start = time.time()
@@ -282,73 +283,65 @@ def main(save_fn=None, gpu_id = None):
 
         for task in range(0,par['n_tasks']):
 
-            """ Training FF Model """
+            #################################
+            ###     Training FF model     ###
+            #################################
+            print('FF Model execution starting.\n')
             for i in range(par['n_train_batches']):
 
                 # make batch of training data
                 name, stim_real, stim_in, y_hat = stim.generate_trial(task, subset_dirs=par['subset_dirs'], subset_loc=par['subset_loc'])
 
                 # 0 for training FF, 1 for training connection, 2 for gFF
-                 _, ff_loss, task_output = sess.run([model.train_op, model.ff_loss, model.task_output], \
+                 _, ff_loss, ff_output = sess.run([model.train_op, model.ff_loss, model.ff_output], \
                     feed_dict = {x:stim_in, target:y_hat, flag:0})
 
                 if i%50 == 0:
-                    acc = get_perf(y_hat, task_output)
-                    print('Iter ', i, 'Task name ', name, ' accuracy', acc, ' loss ', ff_loss)
+                    ff_acc = get_perf(y_hat, ff_output, True)
+                    print("Accuracy of FF Model")
+                    print('Iter ', i, 'Task name ', name, ' accuracy', ff_acc, ' loss ', ff_loss)
+            print('FF Model execution complete.\n')
 
-            """
-            Training Generative Model -- use flag == 1
-            """
+            # Test all tasks at the end of each learning session
+            print("FF Testing Phase")
+            ff_test(stim, model, task)
 
-            """ Training Connections """
+            #################################
+            ###    Training gFF Model     ###
+            #################################
+            print('gFF Model execution starting.\n')
+            """ Training Generative Model -- use flag == 1 """
+            print('gFF Model execution complete.\n')
+            gFF_test(stim, model, task)
+
+            # Test all tasks at the end of each learning session
+            print("gFF Model Testing Phase")
+            conn_test(stim, model, task)
+
+            ################################
+            ### Training Connected Model ###
+            ################################
+            print('Connected Model execution starting.\n')
             for i in range(par['n_train_batches']):
 
                 # make batch of training data
                 name, stim_real, stim_in, y_hat = stim.generate_trial(task, subset_dirs=par['subset_dirs'], subset_loc=par['subset_loc'])
+                y_sample = y_hat
 
                 # 0 for training FF, 1 for training gFF, 2 for connection
-                 _, conn_loss, output = sess.run([model.train_op, model.conn_loss, model.output], \
-                    feed_dict = {x:stim_in, target:y_hat, flag:2})
+                 _, conn_loss, conn_output = sess.run([model.train_op, model.conn_loss, model.conn_output], \
+                    feed_dict = {x:stim_in, target:y_hat, ys: y_sample, flag:2})
 
                 if i%50 == 0:
-                    acc = get_perf(stim_in, output)
-                    print('Iter ', i, 'Task name ', name, ' accuracy', acc, ' loss ', conn_loss)
+                    conn_acc = get_perf(y_sample, conn_output, False)
+                    print("Accuracy of Connected Model")
+                    print('Iter ', i, 'Task name ', name, ' accuracy', conn_acc, ' loss ', conn_loss)
+            print('Connected Model execution complete.\n')
 
             # Test all tasks at the end of each learning session
-            num_reps = 10
-            acc = 0
-            if par['subset_loc']:
-                grid_loc = np.zeros((par['n_neurons'],par['n_neurons']), dtype=np.float32)
-                counter_loc = np.zeros((par['n_neurons'],par['n_neurons']), dtype=np.int32)
-            if par['subset_dirs']:
-                grid_dirs = np.zeros((1,par['num_motion_dirs']+1), dtype=np.float32)
-                counter_dirs = np.zeros((1,par['num_motion_dirs']+1), dtype=np.int32)
-            
-            for (task_prime, r) in product(range(task+1), range(num_reps)):
-                # make batch of training data
-                name, stim_real, stim_in, y_hat = stim.generate_trial(task_prime, subset_dirs=False, subset_loc=False)
-                fast_output = sess.run(model.output, feed_dict = {x:stim_in, target:1})
+            print("Connected Model Testing Phase")
+            conn_test(stim, model)
 
-                if par['subset_loc']:
-                    grid_loc, counter_loc = heat_map(stim_real, y_hat, fast_output, grid_loc, counter_loc,loc=True)
-                if par['subset_dirs']:
-                    grid_dirs, counter_dirs = heat_map(stim_real, y_hat, fast_output, grid_dirs, counter_dirs,loc=False)
-                acc += get_perf(y_hat, fast_output)
-
-            print("Testing accuracy: ", acc/num_reps)
-
-            if par['subset_loc']:
-                counter_loc[counter_loc == 0] = 1
-                plt.imshow(grid_loc/counter_loc, cmap='inferno')
-                plt.colorbar()
-                plt.clim(0,1)
-                plt.show()
-            if par['subset_dirs']:
-                counter_dirs[counter_dirs == 0] = 1
-                plt.imshow(grid_dirs/counter_dirs, cmap='inferno')
-                plt.colorbar()
-                plt.clim(0,1)
-                plt.show()
 
             # Reset the Adam Optimizer, and set the previous parater values to their current values
             sess.run(model.reset_adam_op)
@@ -359,7 +352,6 @@ def main(save_fn=None, gpu_id = None):
             # reset weights between tasks if called upon
             if par['reset_weights']:
                 sess.run(model.reset_weights)
-
 
 
 
@@ -395,15 +387,100 @@ def heat_map(input, target, output, grid, counter,loc=True):
 
     return grid, counter
 
-def get_perf(target, output):
+def get_perf(target, output,ff):
 
     """
     Calculate task accuracy by comparing the actual network output to the desired output
     only examine time points when test stimulus is on
     in another words, when target[:,:,-1] is not 0
     """
-    return np.sum(np.float32((np.absolute(target[:,0] - output[:,0]) < par['tol']) * (np.absolute(target[:,1] - output[:,1]) < par['tol'])))/par['batch_size']
+    if ff:
+        num_total = par['batch_size']
+    else:
+        num_total = par['n_ys']
+    return np.sum(np.float32((np.absolute(target[:,0] - output[:,0]) < par['tol']) * (np.absolute(target[:,1] - output[:,1]) < par['tol'])))/num_total
 
-    #return np.sum([np.float32((t[0] - o[0]) < tol and (t[1] - o[1]) < tol) for (t, o) in zip(target, output)]/par['batch_size']
+def gFF_get_perf(target, output):
+    """
+    Get performance function for generative model
+    """
+    return None
+
+def ff_test(stim, model, task):
+    num_reps = 10
+    acc = 0
+    if par['subset_loc']:
+        grid_loc = np.zeros((par['n_neurons'],par['n_neurons']), dtype=np.float32)
+        counter_loc = np.zeros((par['n_neurons'],par['n_neurons']), dtype=np.int32)
+    if par['subset_dirs']:
+        grid_dirs = np.zeros((1,par['num_motion_dirs']+1), dtype=np.float32)
+        counter_dirs = np.zeros((1,par['num_motion_dirs']+1), dtype=np.int32)
+    
+    for (task_prime, r) in product(range(task+1), range(num_reps)):
+        # make batch of training data
+        name, stim_real, stim_in, y_hat = stim.generate_trial(task_prime, subset_dirs=False, subset_loc=False)
+        ff_output = sess.run(model.output, feed_dict = {x:stim_in, flag:0})
+
+        if par['subset_loc']:
+            grid_loc, counter_loc = heat_map(stim_real, y_hat, ff_output, grid_loc, counter_loc,loc=True)
+        if par['subset_dirs']:
+            grid_dirs, counter_dirs = heat_map(stim_real, y_hat, ff_output, grid_dirs, counter_dirs,loc=False)
+        ff_acc += get_perf(y_hat, ff_output, True)
+
+    print("FF Testing accuracy: ", ff_acc/num_reps, "\n")
+
+    if par['subset_loc']:
+        counter_loc[counter_loc == 0] = 1
+        plt.imshow(grid_loc/counter_loc, cmap='inferno')
+        plt.colorbar()
+        plt.clim(0,1)
+        plt.show()
+    if par['subset_dirs']:
+        counter_dirs[counter_dirs == 0] = 1
+        plt.imshow(grid_dirs/counter_dirs, cmap='inferno')
+        plt.colorbar()
+        plt.clim(0,1)
+        plt.show()
+
+def gFF_test(stim, model, task):
+    """
+    Testing function for gFF model
+    """
+
+def conn_test(stim, model, task):
+    num_reps = 10
+    acc = 0
+    if par['subset_loc']:
+        grid_loc = np.zeros((par['n_neurons'],par['n_neurons']), dtype=np.float32)
+        counter_loc = np.zeros((par['n_neurons'],par['n_neurons']), dtype=np.int32)
+    if par['subset_dirs']:
+        grid_dirs = np.zeros((1,par['num_motion_dirs']+1), dtype=np.float32)
+        counter_dirs = np.zeros((1,par['num_motion_dirs']+1), dtype=np.int32)
+
+    for (task_prime, r) in product(range(task+1), range(num_reps)):
+        # make batch of training data
+        name, stim_real, stim_in, y_hat = stim.generate_trial(task_prime, subset_dirs=False, subset_loc=False)
+        fast_output = sess.run(model.output, feed_dict = {x:stim_in, flag:2})
+
+        if par['subset_loc']:
+            grid_loc, counter_loc = heat_map(stim_real, y_hat, fast_output, grid_loc, counter_loc,loc=True)
+        if par['subset_dirs']:
+            grid_dirs, counter_dirs = heat_map(stim_real, y_hat, fast_output, grid_dirs, counter_dirs,loc=False)
+        acc += get_perf(y_hat, fast_output, False)
+
+    print("Connected Model Testing accuracy: ", acc/num_reps, "\n")
+
+    if par['subset_loc']:
+        counter_loc[counter_loc == 0] = 1
+        plt.imshow(grid_loc/counter_loc, cmap='inferno')
+        plt.colorbar()
+        plt.clim(0,1)
+        plt.show()
+    if par['subset_dirs']:
+        counter_dirs[counter_dirs == 0] = 1
+        plt.imshow(grid_dirs/counter_dirs, cmap='inferno')
+        plt.colorbar()
+        plt.clim(0,1)
+        plt.show()
 
 #main('testing')
