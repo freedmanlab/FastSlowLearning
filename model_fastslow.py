@@ -297,14 +297,14 @@ def main(save_fn=None, gpu_id = None):
                     feed_dict = {x:stim_in, target:y_hat, flag:0})
 
                 if i%50 == 0:
-                    ff_acc = get_perf(y_hat, ff_output, True)
+                    ff_acc = get_perf(y_hat, ff_output, ff=True)
                     print("Accuracy of FF Model")
                     print('Iter ', i, 'Task name ', name, ' accuracy', ff_acc, ' loss ', ff_loss)
             print('FF Model execution complete.\n')
 
             # Test all tasks at the end of each learning session
             print("FF Testing Phase")
-            ff_test(stim, model, task)
+            test(stim, model, task, ff=True)
 
             #################################
             ###    Training gFF Model     ###
@@ -316,7 +316,7 @@ def main(save_fn=None, gpu_id = None):
 
             # Test all tasks at the end of each learning session
             print("gFF Model Testing Phase")
-            conn_test(stim, model, task)
+            gFF_test(stim, model, task)
 
             ################################
             ### Training Connected Model ###
@@ -325,22 +325,22 @@ def main(save_fn=None, gpu_id = None):
             for i in range(par['n_train_batches']):
 
                 # make batch of training data
-                name, stim_real, stim_in, y_hat = stim.generate_trial(task, subset_dirs=par['subset_dirs'], subset_loc=par['subset_loc'])
-                y_sample = y_hat
+                name, _, _, y_hat = stim.generate_trial(task, subset_dirs=par['subset_dirs'], subset_loc=par['subset_loc'])
+                y_sample = y_hat[np.random.choice(np.arange(par['batch_size']), size=par['n_ys'])]
 
                 # 0 for training FF, 1 for training gFF, 2 for connection
                  _, conn_loss, conn_output = sess.run([model.train_op, model.conn_loss, model.conn_output], \
-                    feed_dict = {x:stim_in, target:y_hat, ys: y_sample, flag:2})
+                    feed_dict = {ys: y_sample, flag:2})
 
                 if i%50 == 0:
-                    conn_acc = get_perf(y_sample, conn_output, False)
+                    conn_acc = get_perf(y_sample, conn_output, ff=False)
                     print("Accuracy of Connected Model")
                     print('Iter ', i, 'Task name ', name, ' accuracy', conn_acc, ' loss ', conn_loss)
             print('Connected Model execution complete.\n')
 
             # Test all tasks at the end of each learning session
             print("Connected Model Testing Phase")
-            conn_test(stim, model)
+            test(stim, model, ff=False)
 
 
             # Reset the Adam Optimizer, and set the previous parater values to their current values
@@ -369,9 +369,10 @@ def softmax(x):
     return temp / np.stack(s, axis=2)
     #return np.divide(temp, np.stack(np.sum(temp, axis=2)))
 
-def heat_map(input, target, output, grid, counter,loc=True):
+def heat_map(input, target, output, grid, counter,loc=True,ff):
 
-    for b in range(par['batch_size']):
+    num_total = par['batch_size'] if ff else par['n_ys']
+    for b in range(num_total):
         x, y, dir, m = input[b]
         if m != 0:
             if loc:
@@ -406,7 +407,7 @@ def gFF_get_perf(target, output):
     """
     return None
 
-def ff_test(stim, model, task):
+def test(stim, model, task, ff):
     num_reps = 10
     acc = 0
     if par['subset_loc']:
@@ -419,15 +420,21 @@ def ff_test(stim, model, task):
     for (task_prime, r) in product(range(task+1), range(num_reps)):
         # make batch of training data
         name, stim_real, stim_in, y_hat = stim.generate_trial(task_prime, subset_dirs=False, subset_loc=False)
-        ff_output = sess.run(model.output, feed_dict = {x:stim_in, flag:0})
+        if ff:
+            output = sess.run(model.ff_output, feed_dict = {x:stim_in, flag:0})
+        else:
+            index = np.random.choice(np.arange(par['batch_size']), size=par['n_ys'])
+            stim_real = stim_real[index]
+            y_hat = y_hat[index]
+            output = sess.run(model.conn_output, feed_dict = {ys:y_hat, flag:2})
 
         if par['subset_loc']:
-            grid_loc, counter_loc = heat_map(stim_real, y_hat, ff_output, grid_loc, counter_loc,loc=True)
+            grid_loc, counter_loc = heat_map(stim_real, y_hat, output, grid_loc, counter_loc, loc=True, ff=ff)
         if par['subset_dirs']:
-            grid_dirs, counter_dirs = heat_map(stim_real, y_hat, ff_output, grid_dirs, counter_dirs,loc=False)
-        ff_acc += get_perf(y_hat, ff_output, True)
+            grid_dirs, counter_dirs = heat_map(stim_real, y_hat, output, grid_dirs, counter_dirs, loc=False, ff=ff)
+        acc += get_perf(y_hat, output, ff)
 
-    print("FF Testing accuracy: ", ff_acc/num_reps, "\n")
+    print("Testing accuracy: ", acc/num_reps, "\n")
 
     if par['subset_loc']:
         counter_loc[counter_loc == 0] = 1
@@ -446,41 +453,5 @@ def gFF_test(stim, model, task):
     """
     Testing function for gFF model
     """
-
-def conn_test(stim, model, task):
-    num_reps = 10
-    acc = 0
-    if par['subset_loc']:
-        grid_loc = np.zeros((par['n_neurons'],par['n_neurons']), dtype=np.float32)
-        counter_loc = np.zeros((par['n_neurons'],par['n_neurons']), dtype=np.int32)
-    if par['subset_dirs']:
-        grid_dirs = np.zeros((1,par['num_motion_dirs']+1), dtype=np.float32)
-        counter_dirs = np.zeros((1,par['num_motion_dirs']+1), dtype=np.int32)
-
-    for (task_prime, r) in product(range(task+1), range(num_reps)):
-        # make batch of training data
-        name, stim_real, stim_in, y_hat = stim.generate_trial(task_prime, subset_dirs=False, subset_loc=False)
-        fast_output = sess.run(model.output, feed_dict = {x:stim_in, flag:2})
-
-        if par['subset_loc']:
-            grid_loc, counter_loc = heat_map(stim_real, y_hat, fast_output, grid_loc, counter_loc,loc=True)
-        if par['subset_dirs']:
-            grid_dirs, counter_dirs = heat_map(stim_real, y_hat, fast_output, grid_dirs, counter_dirs,loc=False)
-        acc += get_perf(y_hat, fast_output, False)
-
-    print("Connected Model Testing accuracy: ", acc/num_reps, "\n")
-
-    if par['subset_loc']:
-        counter_loc[counter_loc == 0] = 1
-        plt.imshow(grid_loc/counter_loc, cmap='inferno')
-        plt.colorbar()
-        plt.clim(0,1)
-        plt.show()
-    if par['subset_dirs']:
-        counter_dirs[counter_dirs == 0] = 1
-        plt.imshow(grid_dirs/counter_dirs, cmap='inferno')
-        plt.colorbar()
-        plt.clim(0,1)
-        plt.show()
 
 #main('testing')
