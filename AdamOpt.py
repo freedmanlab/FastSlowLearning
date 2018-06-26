@@ -48,7 +48,7 @@ class AdamOpt:
 
 
     def optimize(self, loss):
-
+        
         grads_and_vars = self.compute_gradients(loss)
         train_op = self.apply_gradients(grads_and_vars)
 

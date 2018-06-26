@@ -46,6 +46,7 @@ class Model:
             self.ls.append(tf.nn.relu(tf.matmul(self.ls[i-1], self.W_ls[i-1]) + self.b_ls[i]))
 
         self.ff_output = tf.matmul(self.ls[-1], self.W_out) + self.b_out
+        return self.ff_output
 
     def run_gFF(self):
         h_in = []
@@ -90,7 +91,54 @@ class Model:
                 h_out.append(act)
 
         self.x_hat = h_out[-1]
+        return self.x_hat
     
+    def train(self):
+        """ Call training functions """
+        tf.cond(tf.equal(self.flag, tf.constant(0,dtype=tf.int8)), true_fn=self.run_FF, false_fn=self.run_gFF)
+        if par['flag'] == 0:
+            return self.run_FF()
+        elif par['flag'] == 1:
+            return self.run_gFF()
+        else:
+            # ys -> connection -> gFF -> FF -> y_hat
+            connect_layer = tf.nn.relu(tf.matmul(self.ys_data, W_conn_in) + b_conn)
+            self.conn_output = tf.matmul(connect_layer, W_conn_out) + b_conn_out
+
+            self.mu = self.conn_output @ W_mu_conn_in + b_mu_conn
+            self.si = self.conn_output @ W_si_conn_in + b_si_conn
+
+            ### Copy from here down to include generative setup in full network
+            self.latent_sample = self.mu + tf.exp(self.si)*tf.random_normal(self.si.shape)
+
+            self.post = tf.nn.relu(self.latent_sample @ self.var_dict['W_lat'] + self.var_dict['b_post'])
+            # self.post = tf.nn.relu(self.mu @ self.var_dict['W_lat'] + self.var_dict['b_post'])
+
+            h_out = []
+            for h in range(len(par['forward_shape']))[::-1]:
+                if len(h_out) == 0:
+                    inp = self.post
+                    W = self.var_dict['W_post']
+                else:
+                    inp = h_out[-1]
+                    W = self.var_dict['W_rec{}'.format(h+1)]
+
+                act = inp @ W + self.var_dict['b_rec{}'.format(h)]
+                if h is not 0:
+                    act = tf.nn.relu(act + 0.*tf.random_normal(act.shape))
+                    act = tf.nn.dropout(act, 0.8)
+                    h_out.append(act)
+                else:
+                    h_out.append(act)
+
+            self.x_hat = h_out[-1]
+
+            ls = [tf.nn.relu(tf.matmul(self.x_hat, W_in) + b_ls[0])]
+            for i in range(1,par['num_layers_ff']):
+                ls.append(tf.nn.relu(tf.matmul(ls[i-1], W_ls[i-1]) + b_ls[i]))
+
+            self.full_output = tf.matmul(ls[-1], W_out) + b_out
+            return self.full_output
 
     def run_model(self):
 
@@ -155,57 +203,37 @@ class Model:
                     self.var_dict['W_rec{}'.format(h)] = tf.get_variable('W_rec{}'.format(h), shape=[par['forward_shape'][h],par['forward_shape'][h-1]])
                 self.var_dict['b_rec{}'.format(h)] = tf.get_variable('b_rec{}'.format(h), shape=[1,par['forward_shape'][h]])
 
-        """ Call training functions """
-        if par['flag'] == 0:
-            print("flag 0")
-            self.run_FF()
-        elif par['flag'] == 1:
-            print("flag 1")
-            self.run_gFF()
-        else:
-            print("flag 2", self.flag)
-            # ys -> connection -> gFF -> FF -> y_hat
-            connect_layer = tf.nn.relu(tf.matmul(self.ys_data, W_conn_in) + b_conn)
-            self.conn_output = tf.matmul(connect_layer, W_conn_out) + b_conn_out
+        self.train = self.train()
 
-            self.mu = self.conn_output @ W_mu_conn_in + b_mu_conn
-            self.si = self.conn_output @ W_si_conn_in + b_si_conn
+    def loss_FF(self, adam_optimizer):
+        self.ff_loss = tf.reduce_mean([tf.square(y - y_hat) for (y, y_hat) in zip(tf.unstack(self.y_data,axis=0), tf.unstack(self.ff_output, axis=0))])
+        with tf.control_dependencies([self.ff_loss]):
+            self.train_op = adam_optimizer.compute_gradients(self.ff_loss)
+        return self.train_op
 
-            ### Copy from here down to include generative setup in full network
-            self.latent_sample = self.mu + tf.exp(self.si)*tf.random_normal(self.si.shape)
+    def loss_gFF(self, adam_optimizer):
+        self.task_loss = 0.*tf.reduce_mean(tf.square(self.y - self.y_data))
+        self.recon_loss = 5000*tf.reduce_mean(tf.square(self.x_hat - self.x_data))
+        self.latent_loss = 1e-6 * -0.5*tf.reduce_mean(tf.reduce_sum(1+self.si-tf.square(self.mu)-tf.exp(self.si),axis=-1))
 
-            self.post = tf.nn.relu(self.latent_sample @ self.var_dict['W_lat'] + self.var_dict['b_post'])
-            # self.post = tf.nn.relu(self.mu @ self.var_dict['W_lat'] + self.var_dict['b_post'])
+        self.total_loss = self.task_loss + self.recon_loss + self.latent_loss
 
-            h_out = []
-            for h in range(len(par['forward_shape']))[::-1]:
-                if len(h_out) == 0:
-                    inp = self.post
-                    W = self.var_dict['W_post']
-                else:
-                    inp = h_out[-1]
-                    W = self.var_dict['W_rec{}'.format(h+1)]
+        self.train_op = adam_optimizer.compute_gradients(self.total_loss)
+        return self.train_op
 
-                act = inp @ W + self.var_dict['b_rec{}'.format(h)]
-                if h is not 0:
-                    act = tf.nn.relu(act + 0.*tf.random_normal(act.shape))
-                    act = tf.nn.dropout(act, 0.8)
-                    h_out.append(act)
-                else:
-                    h_out.append(act)
+    def var_FF(self):
+        self.variables = [var for var in tf.trainable_variables() if var.op.name.find('ff')==0]
+        return self.variables
 
-            self.x_hat = h_out[-1]
-
-            ls = [tf.nn.relu(tf.matmul(self.x_hat, W_in) + b_ls[0])]
-            for i in range(1,par['num_layers_ff']):
-                ls.append(tf.nn.relu(tf.matmul(ls[i-1], W_ls[i-1]) + b_ls[i]))
-
-            self.full_output = tf.matmul(ls[-1], W_out) + b_out
-
+    def var_gFF(self):
+        self.variables = [var for var in tf.trainable_variables() if var.op.name.find('gen')==0]
+        return self.variables
 
     def optimize(self):
 
         # Trainable variables for FF / Generative / Connection
+        self.variables = tf.cond(tf.equal(self.flag, tf.constant(0,dtype=tf.int8)), true_fn=self.var_FF, false_fn=self.var_gFF)
+
         if par['flag'] == 0: 
             self.variables = [var for var in tf.trainable_variables() if var.op.name.find('ff')==0]
         elif par['flag'] == 1:
@@ -227,6 +255,7 @@ class Model:
             reset_prev_vars_ops.append( tf.assign(previous_weights_mu_minus_1[var.op.name], var ) )
 
         # self.aux_loss = tf.add_n(aux_losses)
+        tf.cond(tf.equal(self.flag, tf.constant(0,dtype=tf.int8)), true_fn=self.loss_FF(adam_optimizer), false_fn=self.loss_gFF(adam_optimizer))
         if par['flag'] == 0:
             print("flag 0")
             self.ff_loss = tf.reduce_mean([tf.square(y - y_hat) for (y, y_hat) in zip(tf.unstack(self.y_data,axis=0), tf.unstack(self.ff_output, axis=0))])
@@ -402,7 +431,7 @@ def main(save_fn=None, gpu_id = None):
                 name, stim_real, stim_in, y_hat = stim.generate_trial(task, subset_dirs=par['subset_dirs'], subset_loc=par['subset_loc'])
 
                 # 0 for training FF, 1 for training connection, 2 for gFF
-                _, ff_loss, ff_output = sess.run([model.train_op, model.ff_loss, model.ff_output], feed_dict = {x:stim_in, target:y_hat, flag:0})
+                _, _, ff_loss, ff_output = sess.run([model.train, model.train_op, model.ff_loss, model.ff_output], feed_dict = {x:stim_in, target:y_hat, flag:0})
 
                 if i%50 == 0:
                     ff_acc = get_perf(y_hat, ff_output, ff=True)
@@ -425,7 +454,8 @@ def main(save_fn=None, gpu_id = None):
 
                 # 0 for training FF, 1 for training gFF, 2 for connection
                 feed_dict = {x:neural_inputs, target:outputs, flag:1}
-                _, loss, recon_loss, latent_loss, y_hat, x_hat = sess.run([model.train_op, model.task_loss, \
+                # sess.run([model.train], feed_dict=feed_dict)
+                _, _, loss, recon_loss, latent_loss, y_hat, x_hat = sess.run([model.train, model.train_op, model.task_loss, \
                     model.recon_loss, model.latent_loss, model.y_data, model.x_hat], feed_dict=feed_dict)
 
                 #accuracy = np.mean(np.equal(lab, np.argmax(y_hat, axis=1)))
