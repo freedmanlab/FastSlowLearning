@@ -5,6 +5,7 @@ import os
 import stimulus
 import AdamOpt
 from parameters_RL import *
+import pickle
 
 par['forward_shape'] = [900,200]
 par['n_output'] = 2
@@ -128,6 +129,11 @@ class Model:
         self.train_op = opt.compute_gradients(self.total_loss)
 
 
+        self.generative_vars = {}
+        for var in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='post_latent'):
+            self.generative_vars[var.op.name] = var
+
+
 
 def main():
 
@@ -166,6 +172,11 @@ def main():
 
 
             if i%500 == 0:
+
+                var_dict = sess.run(model.generative_vars)
+                with open('./savedir/generative_var_dict.pkl', 'wb') as vf:
+                    pickle.dump(var_dict, vf)
+
                 for b in range(10):
 
                     output_string = ''
@@ -193,6 +204,7 @@ def main():
                         ax[a,1].imshow(hat, clim=[0,1])
 
                     plt.savefig('./savedir/recon_iter{}_trial{}.png'.format(i,b))
+                    plt.close(fig)
 
 
     print('Complete.')
