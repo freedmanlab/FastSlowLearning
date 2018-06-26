@@ -62,7 +62,7 @@ par = {
     # gFF model
     'forward_shape'         : [900,200,100],
     'n_inter'               : 100,
-    'n_latent'              : 50,
+    'n_latent'              : 10,
 
     # Connected FF and Gen Model
     'n_ys'                  : 256,
