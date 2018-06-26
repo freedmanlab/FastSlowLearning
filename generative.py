@@ -6,10 +6,10 @@ import stimulus
 import AdamOpt
 from parameters_RL import *
 
-par['forward_shape'] = [900,200,100]
+par['forward_shape'] = [900,200]
 par['n_output'] = 2
-par['n_inter'] = 100
-par['n_latent'] = 50
+par['n_inter'] = 50
+par['n_latent'] = 10
 
 # Ignore startup TensorFlow warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
@@ -49,7 +49,7 @@ class Model:
 
             self.var_dict['b_pre'] = tf.get_variable('b_pre', shape=[1,par['n_inter']])
             self.var_dict['b_mu'] = tf.get_variable('b_mu', shape=[1,par['n_latent']])
-            self.var_dict['b_si'] = tf.get_variable('b_si', shape=[1,par['n_latent']])
+            self.var_dict['b_si'] = tf.get_variable('b_si', initializer=-10*tf.ones(shape=[1,par['n_latent']]))
 
         with tf.variable_scope('post_latent'):
             # Latent to post-latent layer
@@ -75,7 +75,7 @@ class Model:
 
             act = inp @ self.var_dict['W_in{}'.format(h)] + self.var_dict['b_hid{}'.format(h)]
             act = tf.nn.relu(act + 0.*tf.random_normal(act.shape))
-            act = tf.nn.dropout(act, 0.8)
+            #act = tf.nn.dropout(act, 0.8)
             h_in.append(act)
 
         self.y = h_in[-1] @ self.var_dict['W_out'] + self.var_dict['b_out']
@@ -85,10 +85,10 @@ class Model:
         self.si = self.pre @ self.var_dict['W_si_in'] + self.var_dict['b_si']
 
         ### Copy from here down to include generative setup in full network
-        self.latent_sample = self.mu + tf.exp(self.si)*tf.random_normal(self.si.shape)
+        self.latent_sample = self.mu + tf.exp(0.5*self.si)*tf.random_normal(self.si.shape)
 
         self.post = tf.nn.relu(self.latent_sample @ self.var_dict['W_lat'] + self.var_dict['b_post'])
-        self.post = tf.nn.relu(self.mu @ self.var_dict['W_lat'] + self.var_dict['b_post'])
+        #self.post = tf.nn.relu(self.mu @ self.var_dict['W_lat'] + self.var_dict['b_post'])
 
         h_out = []
         for h in range(len(par['forward_shape']))[::-1]:
@@ -102,7 +102,7 @@ class Model:
             act = inp @ W + self.var_dict['b_rec{}'.format(h)]
             if h is not 0:
                 act = tf.nn.relu(act + 0.*tf.random_normal(act.shape))
-                act = tf.nn.dropout(act, 0.8)
+                #act = tf.nn.dropout(act, 0.8)
                 h_out.append(act)
             else:
                 h_out.append(act)
@@ -118,10 +118,10 @@ class Model:
         #self.task_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.y, labels=self.target_data, dim=1))
 
         self.task_loss = 0.*tf.reduce_mean(tf.square(self.y - self.target_data))
-        self.recon_loss = 5000*tf.reduce_mean(tf.square(self.x_hat - self.input_data))
+        self.recon_loss = 1000*tf.reduce_mean(tf.square(self.x_hat - self.input_data))
         #self.recon_loss = 1e-3*tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.x_hat, labels=self.input_data))
 
-        self.latent_loss = 1e-6 * -0.5*tf.reduce_mean(tf.reduce_sum(1+self.si-tf.square(self.mu)-tf.exp(self.si),axis=-1))
+        self.latent_loss = 8e-2 * -0.5*tf.reduce_mean(tf.reduce_sum(1+self.si-tf.square(self.mu)-tf.exp(self.si),axis=-1))
 
         self.total_loss = self.task_loss + self.recon_loss + self.latent_loss
 
@@ -131,15 +131,16 @@ class Model:
 
 def main():
 
-    os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+    #os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
     tf.reset_default_graph()
 
     x = tf.placeholder(tf.float32, [par['batch_size'], par['forward_shape'][0]], 'stim')
     y = tf.placeholder(tf.float32, [par['batch_size'], par['n_output']], 'out')
 
-    with tf.device('/gpu:0'):
-        model = Model(x, y)
+    #with tf.device('/gpu:0'):
+    #    model = Model(x, y)
+    model = Model(x, y)
 
     stim = stimulus.MultiStimulus()
 
@@ -152,28 +153,47 @@ def main():
             name, inputs, neural_inputs, outputs = stim.generate_trial(0, False, False)
 
             feed_dict = {x:neural_inputs, y:outputs}
-            _, loss, recon_loss, latent_loss, y_hat, x_hat = sess.run([model.train_op, model.task_loss, \
-                model.recon_loss, model.latent_loss, model.y, model.x_hat], feed_dict=feed_dict)
+            _, loss, recon_loss, latent_loss, y_hat, x_hat, mu, sigma = sess.run([model.train_op, model.task_loss, \
+                model.recon_loss, model.latent_loss, model.y, model.x_hat, model.mu, model.si], feed_dict=feed_dict)
 
             #accuracy = np.mean(np.equal(lab, np.argmax(y_hat, axis=1)))
 
             if i%50 == 0:
                 acc = get_perf(inputs,y_hat)
-                print('{} | Acc: {:.3f} | Loss: {:.3f} | Recon. Loss: {:.3f} | Latent Loss: {:.3f}'.format( \
-                    i, acc, loss, recon_loss, latent_loss))
-            """
-            if i%1000 == 0:
+                print('{} | Reconstr. Loss: {:.3f} | Latent Loss: {:.3f} | <Sig>: {:.3f} +/- {:.3f}'.format( \
+                    i, recon_loss, latent_loss, np.mean(sigma), np.std(sigma)))
 
-                inp = np.sum(np.reshape(neural_inputs[0], [9,10,10]), axis=0)
-                hat = np.sum(np.reshape(x_hat[0], [9,10,10]), axis=0)
 
-                fig, ax = plt.subplots(1,2)
-                ax[0].set_title('Actual')
-                ax[0].imshow(inp, clim=[0,1])
-                ax[1].set_title('Reconstructed')
-                ax[1].imshow(hat, clim=[0,1])
-                plt.show()
-            """
+
+            if i%500 == 0:
+                for b in range(10):
+
+                    output_string = ''
+                    output_string += '\n--- {} ---\n'.format(b)
+                    output_string += 'mu:  {}\n'.format(str(mu[b,:]))
+                    output_string += 'sig: {}\n'.format(str(sigma[b,:]))
+
+                    if b == 0:
+                        rw = 'w'
+                    else:
+                        rw = 'a'
+
+                    with open('./savedir/recon_data_iter{}.txt'.format(i,b), rw) as f:
+                        f.write(output_string)
+
+
+                    fig, ax = plt.subplots(2,2,figsize=[8,8])
+                    for a in range(2):
+                        inp = np.sum(np.reshape(neural_inputs[b], [9,10,10]), axis=a)
+                        hat = np.sum(np.reshape(x_hat[b], [9,10,10]), axis=a)
+
+                        ax[a,0].set_title('Actual (Axis {})'.format(a))
+                        ax[a,0].imshow(inp, clim=[0,1])
+                        ax[a,1].set_title('Reconstructed (Axis {})'.format(a))
+                        ax[a,1].imshow(hat, clim=[0,1])
+
+                    plt.savefig('./savedir/recon_iter{}_trial{}.png'.format(i,b))
+
 
     print('Complete.')
 

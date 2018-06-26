@@ -42,7 +42,7 @@ par = {
 
     # Timings and rates
     'dt'                    : 20,
-    'learning_rate'         : 4e-3,
+    'learning_rate'         : 5e-3,
     'membrane_time_constant': 100,
     'connection_prob'       : 1.0,
     'discount_rate'         : 0.0,
@@ -77,8 +77,8 @@ par = {
     'U_std'                 : 0.45,
 
     # Training specs
-    'batch_size'            : 256,
-    'n_train_batches'       : 3000,
+    'batch_size'            : 1024,
+    'n_train_batches'       : 50000,
 
     # Omega parameters
     'omega_c'               : 1.,

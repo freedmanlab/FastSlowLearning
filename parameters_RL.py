@@ -104,7 +104,7 @@ par = {
 
     # Training specs
     'batch_size'            : 1024,
-    'n_train_batches'       : 5005,
+    'n_train_batches'       : 50000,
     'n_train_batches_slow'  : 3000,
 
     # Omega parameters
