@@ -4,20 +4,12 @@ import matplotlib.pyplot as plt
 import os
 import stimulus
 import AdamOpt
+from parameters_RL import *
 
-global par
-par = {
-    'forward_shape' : [900, 100, 50],
-    'n_output'      : 2,
-    'n_inter'       : 20,
-    'n_latent'      : 16,
-
-    'learning_rate' : 35e-4,
-
-    'batch_size'    : 256,
-    'num_batches'   : 5005,
-}
-
+par['forward_shape'] = [900,200,100]
+par['n_output'] = 2
+par['n_inter'] = 100
+par['n_latent'] = 50
 
 # Ignore startup TensorFlow warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
@@ -82,7 +74,7 @@ class Model:
                 inp = h_in[-1]
 
             act = inp @ self.var_dict['W_in{}'.format(h)] + self.var_dict['b_hid{}'.format(h)]
-            h_in.append(tf.nn.relu(act + 0.02*tf.random_normal(act.shape)))
+            h_in.append(tf.nn.relu(act + 0.*tf.random_normal(act.shape)))
 
         self.y = h_in[-1] @ self.var_dict['W_out'] + self.var_dict['b_out']
         self.pre = tf.nn.relu(h_in[-1] @ self.var_dict['W_pre'] + self.var_dict['b_pre'])
@@ -94,6 +86,7 @@ class Model:
         self.latent_sample = self.mu + tf.exp(self.si)*tf.random_normal(self.si.shape)
 
         self.post = tf.nn.relu(self.latent_sample @ self.var_dict['W_lat'] + self.var_dict['b_post'])
+        self.post = tf.nn.relu(self.mu @ self.var_dict['W_lat'] + self.var_dict['b_post'])
 
         h_out = []
         for h in range(len(par['forward_shape']))[::-1]:
@@ -106,7 +99,7 @@ class Model:
 
             act = inp @ W + self.var_dict['b_rec{}'.format(h)]
             if h is not 0:
-                h_out.append(tf.nn.relu(act + 0.02*tf.random_normal(act.shape)))
+                h_out.append(tf.nn.relu(act + 0.*tf.random_normal(act.shape)))
             else:
                 h_out.append(act)
 
@@ -120,10 +113,11 @@ class Model:
 
         #self.task_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.y, labels=self.target_data, dim=1))
 
-        self.task_loss = 1e-12*tf.reduce_mean(tf.square(self.y - self.target_data))
-        self.recon_loss = 500*tf.reduce_mean(tf.square(self.x_hat - self.input_data))
+        self.task_loss = 0.*tf.reduce_mean(tf.square(self.y - self.target_data))
+        self.recon_loss = 5000*tf.reduce_mean(tf.square(self.x_hat - self.input_data))
+        #self.recon_loss = 1e-3*tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.x_hat, labels=self.input_data))
 
-        self.latent_loss = -0.5*tf.reduce_mean(1+self.si-tf.square(self.mu)-tf.exp(self.si))
+        self.latent_loss = 1e-6 * -0.5*tf.reduce_mean(tf.reduce_sum(1+self.si-tf.square(self.mu)-tf.exp(self.si),axis=-1))
 
         self.total_loss = self.task_loss + self.recon_loss + self.latent_loss
 
@@ -146,11 +140,11 @@ def main():
 
         sess.run(tf.global_variables_initializer())
 
-        for i in range(par['num_batches']):
+        for i in range(par['n_train_batches']):
 
-            name, inputs, outputs = stim.generate_trial(current_task=0, training=True)
+            name, inputs, neural_inputs, outputs = stim.generate_trial(0, False, False)
 
-            feed_dict = {x:inputs, y:outputs}
+            feed_dict = {x:neural_inputs, y:outputs}
             _, loss, recon_loss, latent_loss, y_hat, x_hat = sess.run([model.train_op, model.task_loss, \
                 model.recon_loss, model.latent_loss, model.y, model.x_hat], feed_dict=feed_dict)
 
@@ -158,11 +152,12 @@ def main():
 
             if i%50 == 0:
                 acc = get_perf(inputs,y_hat)
-                print('{} | Acc: {:.3f} | Loss: {:.3f} | Recon. Loss: {:.3f} | Latent Loss: {:.3f}'.format(i, acc, loss, recon_loss, latent_loss))
+                print('{} | Acc: {:.3f} | Loss: {:.3f} | Recon. Loss: {:.3f} | Latent Loss: {:.3f}'.format( \
+                    i, acc, loss, recon_loss, latent_loss))
 
             if i%1000 == 0:
 
-                inp = np.sum(np.reshape(inputs[0], [9,10,10]), axis=0)
+                inp = np.sum(np.reshape(neural_inputs[0], [9,10,10]), axis=0)
                 hat = np.sum(np.reshape(x_hat[0], [9,10,10]), axis=0)
 
                 fig, ax = plt.subplots(1,2)
