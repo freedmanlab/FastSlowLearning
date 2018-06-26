@@ -50,9 +50,48 @@ class Model:
         self.ff_output = tf.matmul(ls[-1], W_out) + b_out
 
     def run_gFF(self):
-        '''
-        architecture for generative FF model
-        '''
+        h_in = []
+        for h in range(len(par['forward_shape'])-1):
+            if len(h_in) == 0:
+                inp = self.x_data
+            else:
+                inp = h_in[-1]
+
+            act = inp @ self.var_dict['W_in{}'.format(h)] + self.var_dict['b_hid{}'.format(h)]
+            act = tf.nn.relu(act + 0.*tf.random_normal(act.shape))
+            act = tf.nn.dropout(act, 0.8)
+            h_in.append(act)
+
+        self.y = h_in[-1] @ self.var_dict['W_out'] + self.var_dict['b_out']
+        self.pre = tf.nn.relu(h_in[-1] @ self.var_dict['W_pre'] + self.var_dict['b_pre'])
+
+        self.mu = self.pre @ self.var_dict['W_mu_in'] + self.var_dict['b_mu']
+        self.si = self.pre @ self.var_dict['W_si_in'] + self.var_dict['b_si']
+
+        ### Copy from here down to include generative setup in full network
+        self.latent_sample = self.mu + tf.exp(self.si)*tf.random_normal(self.si.shape)
+
+        self.post = tf.nn.relu(self.latent_sample @ self.var_dict['W_lat'] + self.var_dict['b_post'])
+        self.post = tf.nn.relu(self.mu @ self.var_dict['W_lat'] + self.var_dict['b_post'])
+
+        h_out = []
+        for h in range(len(par['forward_shape']))[::-1]:
+            if len(h_out) == 0:
+                inp = self.post
+                W = self.var_dict['W_post']
+            else:
+                inp = h_out[-1]
+                W = self.var_dict['W_rec{}'.format(h+1)]
+
+            act = inp @ W + self.var_dict['b_rec{}'.format(h)]
+            if h is not 0:
+                act = tf.nn.relu(act + 0.*tf.random_normal(act.shape))
+                act = tf.nn.dropout(act, 0.8)
+                h_out.append(act)
+            else:
+                h_out.append(act)
+
+        self.x_hat = h_out[-1]
     
 
     def run_model(self):
@@ -80,9 +119,37 @@ class Model:
             W_conn_out = tf.get_variable('W_conn_out', initializer=par['W_conn_out_init'], trainable=True)
             b_conn_out = tf.get_variable('b_conn_out', initializer=par['b_conn_out_init'], trainable=True)
 
-        '''
-        variable scope for generative FF model
-        '''
+        self.var_dict = {}
+        with tf.variable_scope('gen_feedforward'):
+            for h in range(len(par['forward_shape'])-1):
+                self.var_dict['W_in{}'.format(h)] = tf.get_variable('W_in{}'.format(h), shape=[par['forward_shape'][h],par['forward_shape'][h+1]])
+                self.var_dict['b_hid{}'.format(h)] = tf.get_variable('b_hid{}'.format(h), shape=[par['forward_shape'][h+1]])
+
+            self.var_dict['W_out'] = tf.get_variable('W_out', shape=[par['forward_shape'][-1],par['n_output']])
+            self.var_dict['b_out'] = tf.get_variable('b_out', shape=par['n_output'])
+
+        with tf.variable_scope('gen_latent_interface'):
+
+            # Pre-latent
+            self.var_dict['W_pre'] = tf.get_variable('W_pre', shape=[par['forward_shape'][-1],par['n_inter']])
+            self.var_dict['W_mu_in'] = tf.get_variable('W_mu_in', shape=[par['n_inter'],par['n_latent']])
+            self.var_dict['W_si_in'] = tf.get_variable('W_si_in', shape=[par['n_inter'],par['n_latent']])
+
+            self.var_dict['b_pre'] = tf.get_variable('b_pre', shape=[1,par['n_inter']])
+            self.var_dict['b_mu'] = tf.get_variable('b_mu', shape=[1,par['n_latent']])
+            self.var_dict['b_si'] = tf.get_variable('b_si', shape=[1,par['n_latent']])
+
+        with tf.variable_scope('gen_post_latent'):
+            # Latent to post-latent layer
+            self.var_dict['W_lat'] = tf.get_variable('W_lat', shape=[par['n_latent'],par['n_inter']])
+            self.var_dict['W_post'] = tf.get_variable('W_post', shape=[par['n_inter'],par['forward_shape'][-1]])
+            self.var_dict['b_post'] = tf.get_variable('b_post', shape=[1,par['n_inter']])
+
+            # From post-latent layer to input
+            for h in range(0,len(par['forward_shape']))[::-1]:
+                if h is not 0:
+                    self.var_dict['W_rec{}'.format(h)] = tf.get_variable('W_rec{}'.format(h), shape=[par['forward_shape'][h],par['forward_shape'][h-1]])
+                self.var_dict['b_rec{}'.format(h)] = tf.get_variable('b_rec{}'.format(h), shape=[1,par['forward_shape'][h]])
 
         """ Call training functions """
         if self.flag == 0:
@@ -128,12 +195,16 @@ class Model:
                 self.train_op = adam_optimizer.compute_gradients(self.ff_loss)
 
         elif self.flag == 1:
-            """
-            Define loss for generative model
-            """
-            # self.gen_loss = 
-            with tf.control_dependencies([self.gen_loss]):
-                self.train_op = adam_optimizer.compute_gradients(self.gen_loss)
+            self.task_loss = 0.*tf.reduce_mean(tf.square(self.y - self.y_data))
+            self.recon_loss = 5000*tf.reduce_mean(tf.square(self.x_hat - self.x_data))
+            self.latent_loss = 1e-6 * -0.5*tf.reduce_mean(tf.reduce_sum(1+self.si-tf.square(self.mu)-tf.exp(self.si),axis=-1))
+
+            self.total_loss = self.task_loss + self.recon_loss + self.latent_loss
+
+            self.train_op = adam_optimizer.compute_gradients(self.total_loss)
+            # Do we not need these lines?
+            # with tf.control_dependencies([self.gen_loss]):
+            #     self.train_op = adam_optimizer.compute_gradients(self.gen_loss)
         
         else:
             self.conn_loss = tf.reduce_mean([tf.square(ys - ys_hat) for (ys, ys_hat) in zip(tf.unstack(self.ys_data,axis=0), tf.unstack(self.conn_output, axis=0))])
@@ -221,7 +292,7 @@ class Model:
             small_omega_var[var.op.name] = tf.Variable(tf.zeros(var.get_shape()), trainable=False)
             reset_small_omega_ops.append( tf.assign( small_omega_var[var.op.name], small_omega_var[var.op.name]*0.0 ) )
             update_big_omega_ops.append( tf.assign_add( self.big_omega_var[var.op.name], tf.div(tf.nn.relu(small_omega_var[var.op.name]), \
-            	(par['omega_xi'] + tf.square(var-previous_weights_mu_minus_1[var.op.name])))))
+                (par['omega_xi'] + tf.square(var-previous_weights_mu_minus_1[var.op.name])))))
 
 
         # After each task is complete, call update_big_omega and reset_small_omega
@@ -254,6 +325,7 @@ def main(save_fn=None, gpu_id = None):
     x  = tf.placeholder(tf.float32, [par['batch_size'], par['n_input']], 'stim')
     target   = tf.placeholder(tf.float32, [par['batch_size'], par['n_output']], 'out')
     ys = tf.placeholder(tf.float32, [par['batch_size'], par['n_ys']], 'stim_y')
+    flag = tf.placeholder(tf.int8)
 
     stim = stimulus.MultiStimulus()
     accuracy_full = []
@@ -275,7 +347,7 @@ def main(save_fn=None, gpu_id = None):
 
         device = '/cpu:0' if gpu_id is None else '/gpu:0'
         with tf.device(device):
-            model = Model(x, target, ys)
+            model = Model(x, target, ys, flag)
 
         sess.run(tf.global_variables_initializer())
         t_start = time.time()
@@ -293,8 +365,7 @@ def main(save_fn=None, gpu_id = None):
                 name, stim_real, stim_in, y_hat = stim.generate_trial(task, subset_dirs=par['subset_dirs'], subset_loc=par['subset_loc'])
 
                 # 0 for training FF, 1 for training connection, 2 for gFF
-                 _, ff_loss, ff_output = sess.run([model.train_op, model.ff_loss, model.ff_output], \
-                    feed_dict = {x:stim_in, target:y_hat, flag:0})
+                _, ff_loss, ff_output = sess.run([model.train_op, model.ff_loss, model.ff_output], feed_dict = {x:stim_in, target:y_hat, flag:0})
 
                 if i%50 == 0:
                     ff_acc = get_perf(y_hat, ff_output, ff=True)
@@ -310,9 +381,22 @@ def main(save_fn=None, gpu_id = None):
             ###    Training gFF Model     ###
             #################################
             print('gFF Model execution starting.\n')
-            """ Training Generative Model -- use flag == 1 """
+            for i in range(par['n_train_batches']):
+
+                name, inputs, neural_inputs, outputs = stim.generate_trial(task, subset_dirs=False, subset_loc=False)
+
+                # 0 for training FF, 1 for training gFF, 2 for connection
+                feed_dict = {x:neural_inputs, target:outputs, flag:1}
+                _, loss, recon_loss, latent_loss, y_hat, x_hat = sess.run([model.train_op, model.task_loss, \
+                    model.recon_loss, model.latent_loss, model.target, model.x_hat], feed_dict=feed_dict)
+
+                #accuracy = np.mean(np.equal(lab, np.argmax(y_hat, axis=1)))
+
+                if i%50 == 0:
+                    acc = get_perf(inputs,y_hat,ff=True)
+                    print('{} | Acc: {:.3f} | Loss: {:.3f} | Recon. Loss: {:.3f} | Latent Loss: {:.3f}'.format( \
+                        i, acc, loss, recon_loss, latent_loss))
             print('gFF Model execution complete.\n')
-            gFF_test(stim, model, task)
 
             # Test all tasks at the end of each learning session
             print("gFF Model Testing Phase")
@@ -329,7 +413,7 @@ def main(save_fn=None, gpu_id = None):
                 y_sample = y_hat[np.random.choice(np.arange(par['batch_size']), size=par['n_ys'])]
 
                 # 0 for training FF, 1 for training gFF, 2 for connection
-                 _, conn_loss, conn_output = sess.run([model.train_op, model.conn_loss, model.conn_output], \
+                _, conn_loss, conn_output = sess.run([model.train_op, model.conn_loss, model.conn_output], \
                     feed_dict = {ys: y_sample, flag:2})
 
                 if i%50 == 0:
@@ -369,7 +453,7 @@ def softmax(x):
     return temp / np.stack(s, axis=2)
     #return np.divide(temp, np.stack(np.sum(temp, axis=2)))
 
-def heat_map(input, target, output, grid, counter,loc=True,ff):
+def heat_map(input, target, output, grid, counter,loc=True,ff=True):
 
     num_total = par['batch_size'] if ff else par['n_ys']
     for b in range(num_total):

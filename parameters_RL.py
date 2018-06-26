@@ -59,6 +59,11 @@ par = {
     'subset_dirs'           : True,
     'subset_loc'            : False,
 
+    # gFF model
+    'forward_shape'         : [900,200,100],
+    'n_inter'               : 100,
+    'n_latent'              : 50,
+
     # Connected FF and Gen Model
     'n_ys'                  : 256,
     'n_connect'             : 30,
