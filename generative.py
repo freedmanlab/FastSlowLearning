@@ -74,7 +74,9 @@ class Model:
                 inp = h_in[-1]
 
             act = inp @ self.var_dict['W_in{}'.format(h)] + self.var_dict['b_hid{}'.format(h)]
-            h_in.append(tf.nn.relu(act + 0.*tf.random_normal(act.shape)))
+            act = tf.nn.relu(act + 0.*tf.random_normal(act.shape))
+            act = tf.nn.dropout(act, 0.8)
+            h_in.append(act)
 
         self.y = h_in[-1] @ self.var_dict['W_out'] + self.var_dict['b_out']
         self.pre = tf.nn.relu(h_in[-1] @ self.var_dict['W_pre'] + self.var_dict['b_pre'])
@@ -99,7 +101,9 @@ class Model:
 
             act = inp @ W + self.var_dict['b_rec{}'.format(h)]
             if h is not 0:
-                h_out.append(tf.nn.relu(act + 0.*tf.random_normal(act.shape)))
+                act = tf.nn.relu(act + 0.*tf.random_normal(act.shape))
+                act = tf.nn.dropout(act, 0.8)
+                h_out.append(act)
             else:
                 h_out.append(act)
 
@@ -127,12 +131,15 @@ class Model:
 
 def main():
 
+    os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+
     tf.reset_default_graph()
 
     x = tf.placeholder(tf.float32, [par['batch_size'], par['forward_shape'][0]], 'stim')
     y = tf.placeholder(tf.float32, [par['batch_size'], par['n_output']], 'out')
 
-    model = Model(x, y)
+    with tf.device('/gpu:0'):
+        model = Model(x, y)
 
     stim = stimulus.MultiStimulus()
 
@@ -154,7 +161,7 @@ def main():
                 acc = get_perf(inputs,y_hat)
                 print('{} | Acc: {:.3f} | Loss: {:.3f} | Recon. Loss: {:.3f} | Latent Loss: {:.3f}'.format( \
                     i, acc, loss, recon_loss, latent_loss))
-
+            """
             if i%1000 == 0:
 
                 inp = np.sum(np.reshape(neural_inputs[0], [9,10,10]), axis=0)
@@ -166,7 +173,7 @@ def main():
                 ax[1].set_title('Reconstructed')
                 ax[1].imshow(hat, clim=[0,1])
                 plt.show()
-
+            """
 
     print('Complete.')
 
