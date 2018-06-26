@@ -119,6 +119,12 @@ class Model:
             W_conn_out = tf.get_variable('W_conn_out', initializer=par['W_conn_out_init'], trainable=True)
             b_conn_out = tf.get_variable('b_conn_out', initializer=par['b_conn_out_init'], trainable=True)
 
+        with tf.variable_scope('conn_transfer'):
+            W_mu_conn_in = tf.get_variable('W_mu_conn_in', shape=[par['n_inter'],par['n_latent']])
+            W_si_conn_in = tf.get_variable('W_si_conn_in', shape=[par['n_inter'],par['n_latent']])
+            b_mu_conn = tf.get_variable('b_mu_conn', shape=[1,par['n_latent']])
+            b_si_conn = tf.get_variable('b_si_conn', shape=[1,par['n_latent']])
+
         self.var_dict = {}
         with tf.variable_scope('gen_feedforward'):
             for h in range(len(par['forward_shape'])-1):
@@ -162,7 +168,39 @@ class Model:
             connect_layer = tf.nn.relu(tf.matmul(self.ys_data, W_conn_in) + b_conn)
             self.conn_output = tf.matmul(connect_layer, W_conn_out) + b_conn_out
 
-        
+            self.mu = self.conn_output @ W_mu_conn_in + b_mu_conn
+            self.si = self.conn_output @ W_si_conn_in + b_si_conn
+
+            ### Copy from here down to include generative setup in full network
+            self.latent_sample = self.mu + tf.exp(self.si)*tf.random_normal(self.si.shape)
+
+            self.post = tf.nn.relu(self.latent_sample @ self.var_dict['W_lat'] + self.var_dict['b_post'])
+            self.post = tf.nn.relu(self.mu @ self.var_dict['W_lat'] + self.var_dict['b_post'])
+
+            h_out = []
+            for h in range(len(par['forward_shape']))[::-1]:
+                if len(h_out) == 0:
+                    inp = self.post
+                    W = self.var_dict['W_post']
+                else:
+                    inp = h_out[-1]
+                    W = self.var_dict['W_rec{}'.format(h+1)]
+
+                act = inp @ W + self.var_dict['b_rec{}'.format(h)]
+                if h is not 0:
+                    act = tf.nn.relu(act + 0.*tf.random_normal(act.shape))
+                    act = tf.nn.dropout(act, 0.8)
+                    h_out.append(act)
+                else:
+                    h_out.append(act)
+
+            self.x_hat = h_out[-1]
+
+            ls = [tf.nn.relu(tf.matmul(self.x_hat, W_in) + b_ls[0])]
+            for i in range(1,par['num_layers_ff']):
+                ls.append(tf.nn.relu(tf.matmul(ls[i-1], W_ls[i-1]) + b_ls[i]))
+
+            self.full_output = tf.matmul(ls[-1], W_out) + b_out
 
 
     def optimize(self):
@@ -207,7 +245,7 @@ class Model:
             #     self.train_op = adam_optimizer.compute_gradients(self.gen_loss)
         
         else:
-            self.conn_loss = tf.reduce_mean([tf.square(ys - ys_hat) for (ys, ys_hat) in zip(tf.unstack(self.ys_data,axis=0), tf.unstack(self.conn_output, axis=0))])
+            self.conn_loss = tf.reduce_mean([tf.square(ys - ys_hat) for (ys, ys_hat) in zip(tf.unstack(self.ys_data,axis=0), tf.unstack(self.full_output, axis=0))])
             with tf.control_dependencies([self.conn_loss]):
                 self.train_op = adam_optimizer.compute_gradients(self.conn_loss)
         
@@ -324,7 +362,7 @@ def main(save_fn=None, gpu_id = None):
     # Create placeholders for the model
     x  = tf.placeholder(tf.float32, [par['batch_size'], par['n_input']], 'stim')
     target   = tf.placeholder(tf.float32, [par['batch_size'], par['n_output']], 'out')
-    ys = tf.placeholder(tf.float32, [par['batch_size'], par['n_ys']], 'stim_y')
+    ys = tf.placeholder(tf.float32, [par['n_ys'], 2], 'stim_y')
     flag = tf.placeholder(tf.int8)
 
     stim = stimulus.MultiStimulus()
@@ -413,11 +451,11 @@ def main(save_fn=None, gpu_id = None):
                 y_sample = y_hat[np.random.choice(np.arange(par['batch_size']), size=par['n_ys'])]
 
                 # 0 for training FF, 1 for training gFF, 2 for connection
-                _, conn_loss, conn_output = sess.run([model.train_op, model.conn_loss, model.conn_output], \
+                _, conn_loss, full_output = sess.run([model.train_op, model.conn_loss, model.full_output], \
                     feed_dict = {ys: y_sample, flag:2})
 
                 if i%50 == 0:
-                    conn_acc = get_perf(y_sample, conn_output, ff=False)
+                    conn_acc = get_perf(y_sample, full_output, ff=False)
                     print("Accuracy of Connected Model")
                     print('Iter ', i, 'Task name ', name, ' accuracy', conn_acc, ' loss ', conn_loss)
             print('Connected Model execution complete.\n')
@@ -510,7 +548,7 @@ def test(stim, model, task, ff):
             index = np.random.choice(np.arange(par['batch_size']), size=par['n_ys'])
             stim_real = stim_real[index]
             y_hat = y_hat[index]
-            output = sess.run(model.conn_output, feed_dict = {ys:y_hat, flag:2})
+            output = sess.run(model.full_output, feed_dict = {ys:y_hat, flag:2})
 
         if par['subset_loc']:
             grid_loc, counter_loc = heat_map(stim_real, y_hat, output, grid_loc, counter_loc, loc=True, ff=ff)
