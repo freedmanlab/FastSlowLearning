@@ -126,19 +126,6 @@ class Model:
         adam_optimizer_ff = AdamOpt(self.variables_ff, learning_rate = par['learning_rate'])
         adam_optimizer_full = AdamOpt(self.variables_full, learning_rate = par['learning_rate'])
 
-        # previous_weights_mu_minus_1 = {}
-        # reset_prev_vars_ops = []
-        # self.big_omega_var = {}
-        # aux_losses = []
-
-        # for var in self.variables_ff:
-        #     self.big_omega_var[var.op.name] = tf.Variable(tf.zeros(var.get_shape()), trainable=False)
-        #     previous_weights_mu_minus_1[var.op.name] = tf.Variable(tf.zeros(var.get_shape()), trainable=False)
-        #     aux_losses.append(par['omega_c']*tf.reduce_sum(tf.multiply(self.big_omega_var[var.op.name], \
-        #        tf.square(previous_weights_mu_minus_1[var.op.name] - var) )))
-        #     reset_prev_vars_ops.append( tf.assign(previous_weights_mu_minus_1[var.op.name], var ) )
-
-        # self.aux_loss = tf.add_n(aux_losses)
         
         self.ff_loss = tf.reduce_mean([tf.square(y - y_hat) for (y, y_hat) in zip(tf.unstack(self.y_data,axis=0), tf.unstack(self.ff_output, axis=0))])
         with tf.control_dependencies([self.ff_loss]):
@@ -322,7 +309,7 @@ def main(save_fn=None, gpu_id = None):
             for i in range(par['n_train_batches']):
 
                 # make batch of training data
-                name, stim_real, stim_in, y_hat = stim.generate_trial(task, subset_dirs=par['subset_dirs'], subset_loc=par['subset_loc'])
+                name, stim_real, stim_in, y_hat = stim.generate_trial(task, subset_dirs=par['subset_dirs_ff'], subset_loc=par['subset_loc_ff'])
 
                 # 0 for training FF, 1 for training connection, 2 for gFF
                 _, ff_loss, ff_output = sess.run([model.train_op_ff, model.ff_loss, model.ff_output], feed_dict = {x:stim_in, target:y_hat})
@@ -341,7 +328,7 @@ def main(save_fn=None, gpu_id = None):
             ### Training Connected Model ###
             ################################
             print('Connected Model execution starting.\n')
-            for i in range(par['n_train_batches']):
+            for i in range(par['n_train_batches_full']):
 
                 # make batch of training data
                 name, _, _, y_hat = stim.generate_trial(task, subset_dirs=par['subset_dirs'], subset_loc=par['subset_loc'])
@@ -406,6 +393,7 @@ def heat_map(input, target, output, grid, counter,loc=True,ff=True):
 
     return grid, counter
 
+
 def get_perf(target, output,ff):
 
     """
@@ -419,20 +407,15 @@ def get_perf(target, output,ff):
         num_total = par['n_ys']
     return np.sum(np.float32((np.absolute(target[:,0] - output[:,0]) < par['tol']) * (np.absolute(target[:,1] - output[:,1]) < par['tol'])))/num_total
 
-def gFF_get_perf(target, output):
-    """
-    Get performance function for generative model
-    """
-    return None
 
 def test(stim, model, task, sess, x, ys, ff):
     print("FF: ", ff)
     num_reps = 10
     acc = 0
-    if par['subset_loc']:
+    if (ff and par['subset_loc_ff']) or (not ff and par['subset_loc']):
         grid_loc = np.zeros((par['n_neurons'],par['n_neurons']), dtype=np.float32)
         counter_loc = np.zeros((par['n_neurons'],par['n_neurons']), dtype=np.int32)
-    if par['subset_dirs']:
+    if (ff and par['subset_dirs_ff']) or (not ff and par['subset_dirs']):
         grid_dirs = np.zeros((1,par['num_motion_dirs']+1), dtype=np.float32)
         counter_dirs = np.zeros((1,par['num_motion_dirs']+1), dtype=np.int32)
     
@@ -447,25 +430,33 @@ def test(stim, model, task, sess, x, ys, ff):
             y_hat = y_hat[index]
             output = sess.run(model.full_output, feed_dict = {ys:y_hat})
 
-        if par['subset_loc']:
+        if (ff and par['subset_loc_ff']) or (not ff and par['subset_loc']):
             grid_loc, counter_loc = heat_map(stim_real, y_hat, output, grid_loc, counter_loc, loc=True, ff=ff)
-        if par['subset_dirs']:
+        if (ff and par['subset_dirs_ff']) or (not ff and par['subset_dirs']):
             grid_dirs, counter_dirs = heat_map(stim_real, y_hat, output, grid_dirs, counter_dirs, loc=False, ff=ff)
         acc += get_perf(y_hat, output, ff)
 
     print("Testing accuracy: ", acc/num_reps, "\n")
 
-    if par['subset_loc']:
+    if (ff and par['subset_loc_ff']) or (not ff and par['subset_loc']):
         counter_loc[counter_loc == 0] = 1
         plt.imshow(grid_loc/counter_loc, cmap='inferno')
         plt.colorbar()
         plt.clim(0,1)
+        if ff:
+            plt.savefig("./FF_subset_loc_"+str(par['tol'])+"_new.png")
+        else:
+            plt.savefig("./Full_model_subset_loc_"+str(par['tol'])+"_new.png")
         plt.show()
-    if par['subset_dirs']:
+    if (ff and par['subset_dirs_ff']) or (not ff and par['subset_dirs']):
         counter_dirs[counter_dirs == 0] = 1
         plt.imshow(grid_dirs/counter_dirs, cmap='inferno')
         plt.colorbar()
         plt.clim(0,1)
+        if ff:
+            plt.savefig(("./FF_subset_dirs_"+str(par['tol'])+"_new.png"))
+        else:
+            plt.savefig("./Full_model_subset_dirs_"+str(par['tol'])+"_new.png")
         plt.show()
 
 def gFF_test(stim, model, task):
