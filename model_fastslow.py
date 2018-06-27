@@ -331,11 +331,11 @@ def main(save_fn=None, gpu_id = None):
             for i in range(par['n_train_batches_full']):
 
                 # make batch of training data
-                name, _, _, y_hat = stim.generate_trial(task, subset_dirs=par['subset_dirs'], subset_loc=par['subset_loc'])
+                name, stim_real, stim_in, y_hat = stim.generate_trial(task, subset_dirs=par['subset_dirs'], subset_loc=par['subset_loc'])
                 y_sample = y_hat[np.random.choice(np.arange(par['batch_size']), size=par['n_ys'])]
 
                 # 0 for training FF, 1 for training gFF, 2 for connection
-                _, full_loss, full_output = sess.run([model.train_op_full, model.full_loss, model.full_output], feed_dict = {ys: y_sample})
+                _, full_loss, full_output, x_hat = sess.run([model.train_op_full, model.full_loss, model.full_output, model.x_hat], feed_dict = {ys: y_sample})
 
                 if i%50 == 0:
                     conn_acc = get_perf(y_sample, full_output, ff=False)
@@ -344,6 +344,7 @@ def main(save_fn=None, gpu_id = None):
 
             # Test all tasks at the end of each learning session
             print("Connected Model Testing Phase")
+            x_hat_perf(stim_real, stim_in, x_hat)
             test(stim, model, task, sess, x, ys, ff=False)
 
 
@@ -407,6 +408,21 @@ def get_perf(target, output,ff):
         num_total = par['n_ys']
     return np.sum(np.float32((np.absolute(target[:,0] - output[:,0]) < par['tol']) * (np.absolute(target[:,1] - output[:,1]) < par['tol'])))/num_total
 
+def x_hat_perf(stim_real, stim_in, x_hat):
+    for b in range(10):#par['batch_size']):
+        dir = stim_real[b,2]
+        stim = np.reshape(stim_in[b], (9,10,10))
+        hat = np.reshape(x_hat[b], (9,10,10))
+
+        plt.figure()
+        plt.subplot(1,2,1)
+        plt.imshow(stim[int(dir),:,:], cmap='inferno')
+        plt.colorbar()
+
+        plt.subplot(1,2,2)
+        plt.imshow(hat[int(dir),:,:], cmap='inferno')
+        plt.colorbar()
+        plt.show()
 
 def test(stim, model, task, sess, x, ys, ff):
     print("FF: ", ff)
