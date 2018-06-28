@@ -62,8 +62,8 @@ par = {
     'subset_loc'            : True,
 
     # gFF model
-    'forward_shape'         : [900,200,100],
-    'n_inter'               : 100,
+    'forward_shape'         : [900,200],
+    'n_inter'               : 50,
     'n_latent'              : 10,
 
     # Connected FF and Gen Model
@@ -116,7 +116,7 @@ par = {
     # Training specs
     'batch_size'            : 256,
     'n_train_batches'       : 1000,
-    'n_train_batches_full'  : 3000,
+    'n_train_batches_full'  : 10000,
 
     # Omega parameters
     'omega_c'               : 0.05,

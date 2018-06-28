@@ -70,18 +70,19 @@ class Model:
             W_conn_out = tf.get_variable('W_conn_out', initializer=par['W_conn_out_init'], trainable=True)
             b_conn_out = tf.get_variable('b_conn_out', initializer=par['b_conn_out_init'], trainable=True)
 
-        with tf.variable_scope('conn_transfer'):
-            W_mu_conn_in = tf.get_variable('W_mu_conn_in', shape=[par['n_inter'],par['n_latent']], trainable=True)
-            W_si_conn_in = tf.get_variable('W_si_conn_in', shape=[par['n_inter'],par['n_latent']], trainable=True)
-            b_mu_conn = tf.get_variable('b_mu_conn', shape=[1,par['n_latent']], trainable=True)
-            b_si_conn = tf.get_variable('b_si_conn', shape=[1,par['n_latent']], trainable=True)
+        # with tf.variable_scope('conn_transfer'):
+            # W_mu_conn_in = tf.get_variable('W_mu_conn_in', shape=[par['n_inter'],par['n_latent']], trainable=True)
+            # W_si_conn_in = tf.get_variable('W_si_conn_in', shape=[par['n_inter'],par['n_latent']], trainable=True)
+            # b_mu_conn = tf.get_variable('b_mu_conn', shape=[1,par['n_latent']], trainable=True)
+            # b_si_conn = tf.get_variable('b_si_conn', shape=[1,par['n_latent']], trainable=True)
+            # W = tf.get_variable('W_random', initializer=np.float32(np.random.normal(0,1,size=[50,par['n_input']])), trainable=True)
 
         # ys -> connection -> gFF -> FF -> y_hat
         connect_layer = tf.nn.relu(tf.matmul(self.ys_data, W_conn_in) + b_conn)
         self.conn_output = tf.matmul(connect_layer, W_conn_out) + b_conn_out
 
-        self.mu = self.conn_output @ W_mu_conn_in + b_mu_conn
-        self.si = self.conn_output @ W_si_conn_in + b_si_conn
+        self.mu = self.conn_output @ par['var_dict']['latent_interface/W_mu_in'] + par['var_dict']['latent_interface/b_mu']
+        self.si = self.conn_output @ par['var_dict']['latent_interface/W_si_in'] + par['var_dict']['latent_interface/b_si']
 
         ### Copy from here down to include generative setup in full network
         self.latent_sample = self.mu + tf.exp(self.si)*tf.random_normal(self.si.shape)
@@ -89,26 +90,27 @@ class Model:
         self.post = tf.nn.relu(self.latent_sample @ par['var_dict']['post_latent/W_lat'] + par['var_dict']['post_latent/b_post'])
         # self.post = tf.nn.relu(self.mu @ par['var_dict']['W_lat'] + par['var_dict']['b_post'])
 
-        # h_out = []
-        # for h in range(len(par['forward_shape']))[::-1]:
-        #     if len(h_out) == 0:
-        #         inp = self.post
-        #         W = par['var_dict']['post_latent/W_post']
-        #     else:
-        #         inp = h_out[-1]
-        #         W = par['var_dict']['post_latent/W_rec{}'.format(h+1)]
+        h_out = []
+        for h in range(len(par['forward_shape']))[::-1]:
+            if len(h_out) == 0:
+                inp = self.post
+                W = par['var_dict']['post_latent/W_post']
+            else:
+                inp = h_out[-1]
+                W = par['var_dict']['post_latent/W_rec{}'.format(h+1)]
 
-        #     act = inp @ W + par['var_dict']['post_latent/b_rec{}'.format(h)]
-        #     if h is not 0:
-        #         act = tf.nn.relu(act + 0.*tf.random_normal(act.shape))
-        #         act = tf.nn.dropout(act, 0.8)
-        #         h_out.append(act)
-        #     else:
-        #         h_out.append(act)
-        W = np.float32(np.random.normal(0,1,size=[50,par['n_input']]))
-        self.x_hat = self.post @ W
+            act = inp @ W + par['var_dict']['post_latent/b_rec{}'.format(h)]
+            if h is not 0:
+                act = tf.nn.relu(act + 0.*tf.random_normal(act.shape))
+                act = tf.nn.dropout(act, 0.8)
+                h_out.append(act)
+            else:
+                h_out.append(act)
+        
+        # self.W = np.float32(np.random.normal(0,1,size=[50,par['n_input']]))
+        # self.x_hat = self.post @ W
 
-        # self.x_hat = np.float32(np.random.normal(0,1,size=[par['batch_size'],par['n_input']])) #h_out[-1]
+        self.x_hat = h_out[-1]
 
         ls = [tf.nn.relu(tf.matmul(self.x_hat, self.W_in) + self.b_ls[0])]
         for i in range(1,par['num_layers_ff']):
@@ -132,6 +134,9 @@ class Model:
             self.train_op_ff = adam_optimizer_ff.compute_gradients(self.ff_loss)
 
         self.full_loss = tf.reduce_mean([tf.square(ys - ys_hat) for (ys, ys_hat) in zip(tf.unstack(self.ys_data,axis=0), tf.unstack(self.full_output, axis=0))])
+        # self.y_loss = tf.reduce_mean([tf.square(ys - ys_hat) for (ys, ys_hat) in zip(tf.unstack(self.ys_data,axis=0), tf.unstack(self.full_output, axis=0))])
+        # self.x_loss = tf.reduce_mean([tf.square(x - x_hat) for (x, x_hat) in zip(tf.unstack(self.x_data,axis=0), tf.unstack(self.x_hat, axis=0))])
+        # self.full_loss = 0.01*self.y_loss + self.x_loss
         with tf.control_dependencies([self.full_loss]):
             self.train_op_full = adam_optimizer_full.compute_gradients(self.full_loss)
             
@@ -332,19 +337,25 @@ def main(save_fn=None, gpu_id = None):
 
                 # make batch of training data
                 name, stim_real, stim_in, y_hat = stim.generate_trial(task, subset_dirs=par['subset_dirs'], subset_loc=par['subset_loc'])
-                y_sample = y_hat[np.random.choice(np.arange(par['batch_size']), size=par['n_ys'])]
+                ind = np.random.choice(np.arange(par['batch_size']), size=par['n_ys'])
+                stim_real = stim_real[ind]
+                stim_in = stim_in[ind]
+                y_sample = y_hat[ind]
 
                 # 0 for training FF, 1 for training gFF, 2 for connection
-                _, full_loss, full_output, x_hat = sess.run([model.train_op_full, model.full_loss, model.full_output, model.x_hat], feed_dict = {ys: y_sample})
+                _, full_loss, full_output, x_hat = sess.run([model.train_op_full, model.full_loss, model.full_output, model.x_hat], feed_dict = {x: stim_in, ys: y_sample})
 
-                if i%50 == 0:
+                if i%100 == 0:
                     conn_acc = get_perf(y_sample, full_output, ff=False)
                     print('Iter ', i, 'Task name ', name, ' accuracy', conn_acc, ' loss ', full_loss)
+                    if conn_acc >= 0.8:
+                        x_hat_perf(stim_real, stim_in, x_hat,i)
+                if i%500 == 0:
+                    x_hat_perf(stim_real, stim_in, x_hat,i)
             print('Connected Model execution complete.\n')
 
             # Test all tasks at the end of each learning session
             print("Connected Model Testing Phase")
-            x_hat_perf(stim_real, stim_in, x_hat)
             test(stim, model, task, sess, x, ys, ff=False)
 
 
@@ -408,21 +419,46 @@ def get_perf(target, output,ff):
         num_total = par['n_ys']
     return np.sum(np.float32((np.absolute(target[:,0] - output[:,0]) < par['tol']) * (np.absolute(target[:,1] - output[:,1]) < par['tol'])))/num_total
 
-def x_hat_perf(stim_real, stim_in, x_hat):
-    for b in range(10):#par['batch_size']):
-        dir = stim_real[b,2]
+def x_hat_perf(stim_real, stim_in, x_hat,i):
+    # get direction
+    # dir_x = int(np.where(x_hat[b].reshape((9,10,10))==np.max(x_hat[b]))[0]) #for b in range(par['batch_size'])]
+    # ang = np.linspace(0,2*np.pi-2*np.pi/(par['num_motion_tuned']//2),(par['num_motion_tuned']//2))[dir_x]
+    # target = [np.cos(ang), np.sin(ang)]
+
+    for b in range(20):#par['batch_size']):
+        x = int(stim_real[b,0])
+        y = int(stim_real[b,1])
+        dir = int(stim_real[b,2])
+        m = int(stim_real[b,3])
         stim = np.reshape(stim_in[b], (9,10,10))
+        stim2 = np.sum(stim,axis=1)
+        stim2 = np.sum(stim2,axis=1)
         hat = np.reshape(x_hat[b], (9,10,10))
+        hat2 = hat
+        hat2[8,:,:] = 0
+        hat2 = np.sum(hat2,axis=1)
+        hat2 = np.sum(hat2,axis=1)
 
+        # plt.figure()
+        # plt.subplot(1,2,1)
+        # plt.imshow(stim[:,x,y], cmap='inferno')
+        # plt.colorbar()
+
+        # for n in range(par['n_neurons']):
+            # for m in range(par['n_neurons']):
+                # plt.subplot(10,10,(n+1)*9+m+1)
         plt.figure()
-        plt.subplot(1,2,1)
-        plt.imshow(stim[int(dir),:,:], cmap='inferno')
+        # plt.imshow([stim[:,x,y],hat[:,x,y]], cmap='inferno')
+        plt.subplot(2,1,1)
+        plt.imshow([stim2,hat2], cmap='inferno')
+        plt.subplot(2,1,2)
+        plt.imshow(hat[dir])
         plt.colorbar()
-
-        plt.subplot(1,2,2)
-        plt.imshow(hat[int(dir),:,:], cmap='inferno')
-        plt.colorbar()
+        plt.title("x: "+str(x)+" y: "+str(y)+" dir: "+str(dir)+" m: "+str(m))
+        # plt.savefig("./spooky/iter_"+str(i)+"/"+str(b)+".png")
+        plt.clim(-10,10)
         plt.show()
+        plt.close()
 
 def test(stim, model, task, sess, x, ys, ff):
     print("FF: ", ff)
@@ -443,8 +479,10 @@ def test(stim, model, task, sess, x, ys, ff):
         else:
             index = np.random.choice(np.arange(par['batch_size']), size=par['n_ys'])
             stim_real = stim_real[index]
+            stim_in = stim_in[index]
             y_hat = y_hat[index]
-            output = sess.run(model.full_output, feed_dict = {ys:y_hat})
+            output, x_hat = sess.run([model.full_output, model.x_hat], feed_dict = {x:stim_in, ys:y_hat})
+            # x_hat_perf(stim_real, stim_in, x_hat, par['n_train_batches_full'])
 
         if (ff and par['subset_loc_ff']) or (not ff and par['subset_loc']):
             grid_loc, counter_loc = heat_map(stim_real, y_hat, output, grid_loc, counter_loc, loc=True, ff=ff)
