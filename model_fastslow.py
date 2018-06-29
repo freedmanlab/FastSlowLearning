@@ -70,39 +70,47 @@ class Model:
             W_conn_out = tf.get_variable('W_conn_out', initializer=par['W_conn_out_init'], trainable=True)
             b_conn_out = tf.get_variable('b_conn_out', initializer=par['b_conn_out_init'], trainable=True)
 
-        # with tf.variable_scope('conn_transfer'):
-            # W_mu_conn_in = tf.get_variable('W_mu_conn_in', shape=[par['n_inter'],par['n_latent']], trainable=True)
-            # W_si_conn_in = tf.get_variable('W_si_conn_in', shape=[par['n_inter'],par['n_latent']], trainable=True)
-            # b_mu_conn = tf.get_variable('b_mu_conn', shape=[1,par['n_latent']], trainable=True)
-            # b_si_conn = tf.get_variable('b_si_conn', shape=[1,par['n_latent']], trainable=True)
+        with tf.variable_scope('conn_transfer'):
+            W_mu_conn_in = tf.get_variable('W_mu_conn_in', initializer=par['var_dict']['latent_interface/W_mu_in'], trainable=True)
+            W_si_conn_in = tf.get_variable('W_si_conn_in', initializer=par['var_dict']['latent_interface/W_si_in'], trainable=True)
+            b_mu_conn = tf.get_variable('b_mu_conn', initializer=par['var_dict']['latent_interface/b_mu'], trainable=True)
+            b_si_conn = tf.get_variable('b_si_conn', initializer=par['var_dict']['latent_interface/b_si'], trainable=True)
+            W_lat = tf.get_variable('W_lat', initializer=par['var_dict']['post_latent/W_lat'], trainable=True)
+            W_post = tf.get_variable('W_post', initializer=par['var_dict']['post_latent/W_post'], trainable=True)
+            b_post = tf.get_variable('b_post', initializer=par['var_dict']['post_latent/b_post'], trainable=True)
+            W_rec1 = tf.get_variable('W_rec1', initializer=par['var_dict']['post_latent/W_rec1'], trainable=True)
+            b_rec0 = tf.get_variable('b_rec0', initializer=par['var_dict']['post_latent/b_rec0'], trainable=True)
+            b_rec1 = tf.get_variable('b_rec1', initializer=par['var_dict']['post_latent/b_rec1'], trainable=True)
             # W = tf.get_variable('W_random', initializer=np.float32(np.random.normal(0,1,size=[50,par['n_input']])), trainable=True)
 
         # ys -> connection -> gFF -> FF -> y_hat
         connect_layer = tf.nn.relu(tf.matmul(self.ys_data, W_conn_in) + b_conn)
         self.conn_output = tf.matmul(connect_layer, W_conn_out) + b_conn_out
 
-        self.mu = self.conn_output @ par['var_dict']['latent_interface/W_mu_in'] + par['var_dict']['latent_interface/b_mu']
-        self.si = self.conn_output @ par['var_dict']['latent_interface/W_si_in'] + par['var_dict']['latent_interface/b_si']
+        self.mu = self.conn_output @ W_mu_conn_in + b_mu_conn
+        self.si = self.conn_output @ W_si_conn_in + b_si_conn
 
         ### Copy from here down to include generative setup in full network
-        self.latent_sample = self.mu + tf.exp(self.si)*tf.random_normal(self.si.shape)
+        self.latent_sample = self.mu + tf.exp(0.5*self.si)*tf.random_normal(self.si.shape)
 
-        self.post = tf.nn.relu(self.latent_sample @ par['var_dict']['post_latent/W_lat'] + par['var_dict']['post_latent/b_post'])
+        self.post = tf.nn.relu(self.latent_sample @ W_lat + b_post)
         # self.post = tf.nn.relu(self.mu @ par['var_dict']['W_lat'] + par['var_dict']['b_post'])
 
         h_out = []
         for h in range(len(par['forward_shape']))[::-1]:
             if len(h_out) == 0:
                 inp = self.post
-                W = par['var_dict']['post_latent/W_post']
+                W = W_post
             else:
                 inp = h_out[-1]
-                W = par['var_dict']['post_latent/W_rec{}'.format(h+1)]
+                W = W_rec1 #par['var_dict']['post_latent/W_rec{}'.format(h+1)]
 
-            act = inp @ W + par['var_dict']['post_latent/b_rec{}'.format(h)]
+            if h == 0:
+                act = inp @ W + b_rec0
+            else:
+                act = inp @ W + b_rec1
             if h is not 0:
-                act = tf.nn.relu(act + 0.*tf.random_normal(act.shape))
-                act = tf.nn.dropout(act, 0.8)
+                act = tf.nn.relu(act)
                 h_out.append(act)
             else:
                 h_out.append(act)
@@ -319,7 +327,7 @@ def main(save_fn=None, gpu_id = None):
                 # 0 for training FF, 1 for training connection, 2 for gFF
                 _, ff_loss, ff_output = sess.run([model.train_op_ff, model.ff_loss, model.ff_output], feed_dict = {x:stim_in, target:y_hat})
 
-                if i%50 == 0:
+                if i%100 == 0:
                     ff_acc = get_perf(y_hat, ff_output, ff=True)
                     print('Iter ', i, 'Task name ', name, ' accuracy', ff_acc, ' loss ', ff_loss)
             print('FF Model execution complete.\n')
@@ -348,14 +356,15 @@ def main(save_fn=None, gpu_id = None):
                 if i%100 == 0:
                     conn_acc = get_perf(y_sample, full_output, ff=False)
                     print('Iter ', i, 'Task name ', name, ' accuracy', conn_acc, ' loss ', full_loss)
-                    if conn_acc >= 0.8:
-                        x_hat_perf(stim_real, stim_in, x_hat,i)
+                    # if conn_acc >= 0.8:
+                        # x_hat_perf(stim_real, stim_in, x_hat,i)
                 if i%500 == 0:
                     x_hat_perf(stim_real, stim_in, x_hat,i)
             print('Connected Model execution complete.\n')
 
             # Test all tasks at the end of each learning session
             print("Connected Model Testing Phase")
+            test(stim, model, task, sess, x, ys, ff=True)
             test(stim, model, task, sess, x, ys, ff=False)
 
 
@@ -452,12 +461,14 @@ def x_hat_perf(stim_real, stim_in, x_hat,i):
         plt.subplot(2,1,1)
         plt.imshow([stim2,hat2], cmap='inferno')
         plt.subplot(2,1,2)
-        plt.imshow(hat[dir])
+        hat_sum = np.sum(hat, axis=0)
+        plt.imshow(hat_sum)
+        # plt.imshow(hat[dir])
         plt.colorbar()
         plt.title("x: "+str(x)+" y: "+str(y)+" dir: "+str(dir)+" m: "+str(m))
-        # plt.savefig("./spooky/iter_"+str(i)+"/"+str(b)+".png")
+        plt.savefig("./new_model/iter_"+str(i)+"_"+str(b)+".png")
         plt.clim(-10,10)
-        plt.show()
+        # plt.show()
         plt.close()
 
 def test(stim, model, task, sess, x, ys, ff):
