@@ -29,7 +29,6 @@ class Model:
         self.x_data             = x
         self.y_data             = y
         self.ys_data            = ys
-        # par['var_dict']            = weights
 
         # Build the TensorFlow graph
         self.run_model_ff()
@@ -40,6 +39,7 @@ class Model:
 
 
     def run_model_ff(self):
+        # FF weights
         with tf.variable_scope('ff_in'):
             self.W_in = tf.get_variable('W_in',initializer=par['W_in_init'], trainable=True)
 
@@ -55,6 +55,7 @@ class Model:
             self.W_out = tf.get_variable('W_out',initializer=par['W_out_init'], trainable=True)
             self.b_out = tf.get_variable('b_out',initializer=par['b_out_init'], trainable=True)
 
+        # FF layers
         ls = [tf.nn.relu(tf.matmul(self.x_data, self.W_in) + self.b_ls[0])]
         for i in range(1,par['num_layers_ff']):
             ls.append(tf.nn.relu(tf.matmul(ls[i-1], self.W_ls[i-1]) + self.b_ls[i]))
@@ -63,6 +64,7 @@ class Model:
 
 
     def run_model_full(self):
+        # Conn weights
         with tf.variable_scope('conn_in'):
             W_conn_in = tf.get_variable('W_conn_in', initializer=par['W_conn_in_init'], trainable=True)
             b_conn = tf.get_variable('b_conn', initializer=par['b_conn_init'], trainable=True)
@@ -78,6 +80,7 @@ class Model:
             # b_si_conn = tf.get_variable('b_si_conn', shape=[1,par['n_latent']], trainable=True)
             # W = tf.get_variable('W_random', initializer=np.float32(np.random.normal(0,1,size=[50,par['n_input']])), trainable=True)
 
+        # All layers
         # ys -> connection -> gFF -> FF -> y_hat
         connect_layer = tf.nn.relu(tf.matmul(self.ys_data, W_conn_in) + b_conn)
         self.conn_output = tf.matmul(connect_layer, W_conn_out) + b_conn_out
@@ -108,11 +111,12 @@ class Model:
                 h_out.append(act)
         self.x_hat = h_out[-1]
 
+        # Skipped connection model (muted for now)
         # W = np.float32(np.random.normal(0,1,size=[50,par['n_input']]))
         # self.x_hat = self.post @ W
 
 
-
+        # FF model layers
         ls = [tf.nn.relu(tf.matmul(self.x_hat, self.W_in) + self.b_ls[0])]
         for i in range(1,par['num_layers_ff']):
             ls.append(tf.nn.relu(tf.matmul(ls[i-1], self.W_ls[i-1]) + self.b_ls[i]))
@@ -135,9 +139,6 @@ class Model:
             self.train_op_ff = adam_optimizer_ff.compute_gradients(self.ff_loss)
 
         self.full_loss = tf.reduce_mean([tf.square(ys - ys_hat) for (ys, ys_hat) in zip(tf.unstack(self.ys_data,axis=0), tf.unstack(self.full_output, axis=0))])
-        # self.y_loss = tf.reduce_mean([tf.square(ys - ys_hat) for (ys, ys_hat) in zip(tf.unstack(self.ys_data,axis=0), tf.unstack(self.full_output, axis=0))])
-        # self.x_loss = tf.reduce_mean([tf.square(x - x_hat) for (x, x_hat) in zip(tf.unstack(self.x_data,axis=0), tf.unstack(self.x_hat, axis=0))])
-        # self.full_loss = 0.01*self.y_loss + self.x_loss
         with tf.control_dependencies([self.full_loss]):
             self.train_op_full = adam_optimizer_full.compute_gradients(self.full_loss)
 
@@ -317,7 +318,7 @@ def main(save_fn=None, gpu_id = None):
                 # make batch of training data
                 name, stim_real, stim_in, y_hat = stim.generate_trial(task, subset_dirs=par['subset_dirs_ff'], subset_loc=par['subset_loc_ff'])
 
-                # 0 for training FF, 1 for training connection, 2 for gFF
+                # train just ff weights
                 _, ff_loss, ff_output = sess.run([model.train_op_ff, model.ff_loss, model.ff_output], feed_dict = {x:stim_in, target:y_hat})
 
                 if i%50 == 0:
@@ -343,21 +344,15 @@ def main(save_fn=None, gpu_id = None):
                 stim_in = stim_in[ind]
                 y_sample = y_hat[ind]
 
-                # 0 for training FF, 1 for training gFF, 2 for connection
+                # train just the conn weights
                 _, full_loss, full_output, x_hat = sess.run([model.train_op_full, model.full_loss, model.full_output, model.x_hat], feed_dict = {x: stim_in, ys: y_sample})
 
                 if i%100 == 0:
                     conn_acc = get_perf(y_sample, full_output, ff=False)
-                    #ang_acc = get_perf_angle(stim_real, full_output)
-                    #3print("ys_hat \t y_sample \t diff")
-                    # for k in range(20):
-                    #     print(full_output[k], y_sample[k], np.absolute(full_output[k]-y_sample[k]))
                     print('Iter ', i, 'Task name ', name, ' accuracy', conn_acc, ' loss ', full_loss)
+                    
                     visualization(stim_real, x_hat)
-                    #if conn_acc >= 0.9:
-                    #    x_hat_perf(stim_real, stim_in, x_hat)
-                # if i%500 == 0:
-                #     x_hat_perf(stim_real, stim_in, x_hat)
+
             print('Connected Model execution complete.\n')
 
             # Test all tasks at the end of each learning session
@@ -448,14 +443,14 @@ def visualization(stim_real, x_hat):
     for b in range(10):
         z = np.reshape(x_hat[b], (9,10,10))
         y_sample_dir = int(stim_real[b,2])
-        #plt.figure(figsize=(7,7))
-        #plt.title("y_sample: "+str(y_sample_dir))
+        vmin = np.min(z)
+        vmax = np.max(z)
 
         fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(7,7))
         fig.suptitle("y_sample: "+str(y_sample_dir))
         i = 0
         for ax in axes.flat:
-            im = ax.imshow(z[i,:,:], vmin=0, vmax=1, cmap='inferno')
+            im = ax.imshow(z[i,:,:], vmin=vmin, vmax=vmax, cmap='inferno')
             i += 1
         cax,kw = mpl.colorbar.make_axes([ax for ax in axes.flat])
         plt.colorbar(im, cax=cax, **kw)
@@ -536,10 +531,13 @@ def test(stim, model, task, sess, x, ys, ff):
     print("FF: ", ff)
     num_reps = 10
     acc = 0
-    if (ff and par['subset_loc_ff']) or (not ff and par['subset_loc']):
+    subset_loc = ((ff and par['subset_loc_ff']) or (not ff and par['subset_loc']))
+    subset_dirs = ((ff and par['subset_dirs_ff']) or (not ff and par['subset_dirs']))
+
+    if subset_loc:
         grid_loc = np.zeros((par['n_neurons'],par['n_neurons']), dtype=np.float32)
         counter_loc = np.zeros((par['n_neurons'],par['n_neurons']), dtype=np.int32)
-    if (ff and par['subset_dirs_ff']) or (not ff and par['subset_dirs']):
+    if subset_dirs:
         grid_dirs = np.zeros((1,par['num_motion_dirs']+1), dtype=np.float32)
         counter_dirs = np.zeros((1,par['num_motion_dirs']+1), dtype=np.int32)
 
@@ -557,15 +555,15 @@ def test(stim, model, task, sess, x, ys, ff):
 
             # x_hat_perf(stim_real, stim_in, x_hat, par['n_train_batches_full'])
 
-        if (ff and par['subset_loc_ff']) or (not ff and par['subset_loc']):
+        if subset_loc:
             grid_loc, counter_loc = heat_map(stim_real, y_hat, output, grid_loc, counter_loc, loc=True, ff=ff)
-        if (ff and par['subset_dirs_ff']) or (not ff and par['subset_dirs']):
+        if subset_dirs:
             grid_dirs, counter_dirs = heat_map(stim_real, y_hat, output, grid_dirs, counter_dirs, loc=False, ff=ff)
         acc += get_perf(y_hat, output, ff)
 
     print("Testing accuracy: ", acc/num_reps, "\n")
 
-    if (ff and par['subset_loc_ff']) or (not ff and par['subset_loc']):
+    if subset_loc:
         counter_loc[counter_loc == 0] = 1
         plt.imshow(grid_loc/counter_loc, cmap='inferno')
         plt.colorbar()
@@ -575,7 +573,7 @@ def test(stim, model, task, sess, x, ys, ff):
         else:
             plt.savefig("./Full_model_subset_loc_"+str(par['tol'])+"_new.png")
         plt.show()
-    if (ff and par['subset_dirs_ff']) or (not ff and par['subset_dirs']):
+    if subset_dirs:
         counter_dirs[counter_dirs == 0] = 1
         plt.imshow(grid_dirs/counter_dirs, cmap='inferno')
         plt.colorbar()
@@ -585,10 +583,5 @@ def test(stim, model, task, sess, x, ys, ff):
         else:
             plt.savefig("./Full_model_subset_dirs_"+str(par['tol'])+"_new.png")
         plt.show()
-
-def gFF_test(stim, model, task):
-    """
-    Testing function for gFF model
-    """
 
 #main('testing')
