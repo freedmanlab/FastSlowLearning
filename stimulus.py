@@ -140,8 +140,8 @@ class MultiStimulus:
 
         for b in range(par['batch_size']):
             if subset_loc:
-                x = np.random.randint(2,par['n_neurons'])
-                y = np.random.randint(2,par['n_neurons'])
+                x = np.random.randint(5,par['n_neurons'])
+                y = np.random.randint(5,par['n_neurons'])
             else:
                 x = np.random.randint(par['n_neurons'])
                 y = np.random.randint(par['n_neurons'])
