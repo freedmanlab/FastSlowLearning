@@ -56,10 +56,10 @@ par = {
     'motion_var'            : 1.0,
     'num_layers_ff'         : 2,
     'tol'                   : 0.01,
-    'subset_dirs_ff'        : False,
-    'subset_loc_ff'         : True,
-    'subset_dirs'           : False,
-    'subset_loc'            : True,
+    'subset_dirs_ff'        : True,
+    'subset_loc_ff'         : False,
+    'subset_dirs'           : True,
+    'subset_loc'            : False,
 
     # gFF model
     'forward_shape'         : [900,200],

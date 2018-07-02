@@ -350,7 +350,7 @@ def main(save_fn=None, gpu_id = None):
                 if i%100 == 0:
                     conn_acc = get_perf(y_sample, full_output, ff=False)
                     print('Iter ', i, 'Task name ', name, ' accuracy', conn_acc, ' loss ', full_loss)
-                    
+
                     visualization(stim_real, x_hat)
 
             print('Connected Model execution complete.\n')
@@ -393,7 +393,7 @@ def heat_map(input, target, output, grid, counter,loc=True,ff=True):
 
     num_total = par['batch_size'] if ff else par['n_ys']
     for b in range(num_total):
-        x, y, dir, m = input[b]
+        x, y, dir, m, fix = input[b]
         if m != 0:
             if loc:
                 counter[int(x), int(y)] += 1
@@ -443,11 +443,12 @@ def visualization(stim_real, x_hat):
     for b in range(10):
         z = np.reshape(x_hat[b], (9,10,10))
         y_sample_dir = int(stim_real[b,2])
+        fix = int(stim_real[b,4])
         vmin = np.min(z)
         vmax = np.max(z)
 
         fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(7,7))
-        fig.suptitle("y_sample: "+str(y_sample_dir))
+        fig.suptitle("y_sample: "+str(y_sample_dir)+" fix: "+str(fix))
         i = 0
         for ax in axes.flat:
             im = ax.imshow(z[i,:,:], vmin=vmin, vmax=vmax, cmap='inferno')
@@ -494,6 +495,7 @@ def x_hat_perf(stim_real, stim_in, x_hat):
             y = int(stim_real[b,1])
             dir = int(stim_real[b,2])
             m = int(stim_real[b,3])
+
             stim = np.reshape(stim_in[b], (9,10,10))
             stim2 = np.sum(stim,axis=1)
             stim2 = np.sum(stim2,axis=1)
