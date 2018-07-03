@@ -56,10 +56,10 @@ par = {
     'motion_var'            : 1.0,
     'num_layers_ff'         : 2,
     'tol'                   : 0.01,
-    'subset_dirs_ff'        : True,
-    'subset_loc_ff'         : False,
-    'subset_dirs'           : True,
-    'subset_loc'            : False,
+    'subset_dirs_ff'        : False,
+    'subset_loc_ff'         : True,
+    'subset_dirs'           : False,
+    'subset_loc'            : True,
 
     # gFF model
     'forward_shape'         : [900,200],
@@ -116,7 +116,7 @@ par = {
 
     # Training specs
     'batch_size'            : 256,
-    'n_train_batches'       : 1000,
+    'n_train_batches'       : 500,
     'n_train_batches_full'  : 3000,
 
     # Omega parameters

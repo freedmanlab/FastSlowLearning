@@ -73,11 +73,11 @@ class Model:
             W_conn_out = tf.get_variable('W_conn_out', initializer=par['W_conn_out_init'], trainable=True)
             b_conn_out = tf.get_variable('b_conn_out', initializer=par['b_conn_out_init'], trainable=True)
 
-        # with tf.variable_scope('conn_transfer'):
-            # W_mu_conn_in = tf.get_variable('W_mu_conn_in', shape=[par['n_inter'],par['n_latent']], trainable=True)
-            # W_si_conn_in = tf.get_variable('W_si_conn_in', shape=[par['n_inter'],par['n_latent']], trainable=True)
-            # b_mu_conn = tf.get_variable('b_mu_conn', shape=[1,par['n_latent']], trainable=True)
-            # b_si_conn = tf.get_variable('b_si_conn', shape=[1,par['n_latent']], trainable=True)
+        with tf.variable_scope('conn_transfer'):
+            W_mu_conn_in = tf.get_variable('W_mu_conn_in', shape=[par['n_inter'],par['n_latent']], trainable=True)
+            W_si_conn_in = tf.get_variable('W_si_conn_in', shape=[par['n_inter'],par['n_latent']], trainable=True)
+            b_mu_conn = tf.get_variable('b_mu_conn', shape=[1,par['n_latent']], trainable=True)
+            b_si_conn = tf.get_variable('b_si_conn', shape=[1,par['n_latent']], trainable=True)
             # W = tf.get_variable('W_random', initializer=np.float32(np.random.normal(0,1,size=[50,par['n_input']])), trainable=True)
 
         # All layers
@@ -85,10 +85,13 @@ class Model:
         connect_layer = tf.nn.relu(tf.matmul(self.ys_data, W_conn_in) + b_conn)
         self.conn_output = tf.matmul(connect_layer, W_conn_out) + b_conn_out
 
-        self.mu = self.conn_output @ par['var_dict']['latent_interface/W_mu_in'] + par['var_dict']['latent_interface/b_mu']
-        self.si = self.conn_output @ par['var_dict']['latent_interface/W_si_in'] + par['var_dict']['latent_interface/b_si']
+        self.mu = self.conn_output @ W_mu_conn_in + b_mu_conn
+        self.si = self.conn_output @ W_si_conn_in + b_si_conn
 
-        ### Copy from here down to include generative setup in full network
+        # self.mu = self.conn_output @ par['var_dict']['latent_interface/W_mu_in'] + par['var_dict']['latent_interface/b_mu']
+        # self.si = self.conn_output @ par['var_dict']['latent_interface/W_si_in'] + par['var_dict']['latent_interface/b_si']
+
+        # ### Copy from here down to include generative setup in full network
         self.latent_sample = self.mu + tf.exp(0.5*self.si)*tf.random_normal(self.si.shape)
 
         self.post = tf.nn.relu(self.latent_sample @ par['var_dict']['post_latent/W_lat'] + par['var_dict']['post_latent/b_post'])
@@ -139,8 +142,11 @@ class Model:
             self.train_op_ff = adam_optimizer_ff.compute_gradients(self.ff_loss)
 
         self.full_loss = tf.reduce_mean([tf.square(ys - ys_hat) for (ys, ys_hat) in zip(tf.unstack(self.ys_data,axis=0), tf.unstack(self.full_output, axis=0))])
-        with tf.control_dependencies([self.full_loss]):
-            self.train_op_full = adam_optimizer_full.compute_gradients(self.full_loss)
+
+        self.latent_loss = 8e-3 * -0.5*tf.reduce_mean(tf.reduce_sum(1+self.si-tf.square(self.mu)-tf.exp(self.si),axis=-1))
+
+        with tf.control_dependencies([self.full_loss + self.latent_loss]):
+            self.train_op_full = adam_optimizer_full.compute_gradients(self.full_loss + self.latent_loss)
 
 
         # self.reset_prev_vars = tf.group(*reset_prev_vars_ops)
@@ -273,7 +279,7 @@ def main(save_fn=None, gpu_id = None):
 
     # Reset TensorFlow graph
     tf.reset_default_graph()
-    f = open("./generative_var_dict.pkl","rb")
+    f = open("./generative_var_dict_with_fixation.pkl","rb")
     par['var_dict'] = pickle.load(f)
 
 
@@ -343,14 +349,15 @@ def main(save_fn=None, gpu_id = None):
                 stim_real = stim_real[ind]
                 stim_in = stim_in[ind]
                 y_sample = y_hat[ind]
+                #y_sample = np.array([[1.0,0.0]]*par['batch_size'])
 
                 # train just the conn weights
-                _, full_loss, full_output, x_hat = sess.run([model.train_op_full, model.full_loss, model.full_output, model.x_hat], feed_dict = {x: stim_in, ys: y_sample})
+                _, full_loss, latent_loss, full_output, x_hat, mu, si = sess.run([model.train_op_full, model.full_loss, model.latent_loss, model.full_output, model.x_hat, model.mu, model.si], feed_dict = {ys: y_sample})
 
                 if i%100 == 0:
                     conn_acc = get_perf(y_sample, full_output, ff=False)
-                    print('Iter ', i, 'Task name ', name, ' accuracy', conn_acc, ' loss ', full_loss)
-
+                    print('Iter ', i, 'Task name ', name, ' accuracy', conn_acc, ' loss ', full_loss, ' latent_loss ',latent_loss, ' mu ', [np.mean(mu), np.std(mu)], ' si ', [np.mean(si), np.std(si)])
+                if conn_acc>0.75:
                     visualization(stim_real, x_hat)
 
             print('Connected Model execution complete.\n')
@@ -553,6 +560,7 @@ def test(stim, model, task, sess, x, ys, ff):
             stim_real = stim_real[index]
             stim_in = stim_in[index]
             y_hat = y_hat[index]
+
             output, x_hat = sess.run([model.full_output, model.x_hat], feed_dict = {x:stim_in, ys:y_hat})
 
             # x_hat_perf(stim_real, stim_in, x_hat, par['n_train_batches_full'])
