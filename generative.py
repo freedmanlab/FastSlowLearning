@@ -1,13 +1,14 @@
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 import os
 import stimulus
 import AdamOpt
 from parameters_RL import *
 import pickle
 
-par['forward_shape'] = [900,200]
+par['forward_shape'] = [1000,200]
 par['n_output'] = 2
 par['n_inter'] = 50
 par['n_latent'] = 10
@@ -171,11 +172,13 @@ def main():
 
 
 
-            if i%500 == 0:
+            if i%500 == 0 and i!=0:
 
                 var_dict = sess.run(model.generative_vars)
-                with open('./savedir/generative_var_dict.pkl', 'wb') as vf:
+                with open('./savedir/generative_var_dict_with_fixation_v3.pkl', 'wb') as vf:
                     pickle.dump(var_dict, vf)
+
+                visualization(inputs, x_hat)
 
                 for b in range(10):
 
@@ -195,8 +198,8 @@ def main():
 
                     fig, ax = plt.subplots(2,2,figsize=[8,8])
                     for a in range(2):
-                        inp = np.sum(np.reshape(neural_inputs[b], [9,10,10]), axis=a)
-                        hat = np.sum(np.reshape(x_hat[b], [9,10,10]), axis=a)
+                        inp = np.sum(np.reshape(neural_inputs[b], [10,10,10]), axis=a)
+                        hat = np.sum(np.reshape(x_hat[b], [10,10,10]), axis=a)
 
                         ax[a,0].set_title('Actual (Axis {})'.format(a))
                         ax[a,0].imshow(inp, clim=[0,1])
@@ -209,6 +212,28 @@ def main():
 
     print('Complete.')
 
+def visualization(stim_real, x_hat):
+    for b in range(10):
+        z = np.reshape(x_hat[b], (10,10,10))
+        y_sample_dir = int(stim_real[b,2])
+        motion = int(stim_real[b,3])
+        fix = int(stim_real[b,4])
+        vmin = np.min(z)
+        vmax = np.max(z)
+
+        fig, axes = plt.subplots(nrows=3, ncols=4, figsize=(12,7))
+        fig.suptitle("y_sample: "+str(y_sample_dir)+" motion: "+str(motion)+" fix: "+str(fix))
+        i = 0
+        for ax in axes.flat:
+            im = ax.imshow(z[i,:,:], vmin=vmin, vmax=vmax, cmap='inferno')
+            i += 1
+            if (i==10):
+                break
+        cax,kw = mpl.colorbar.make_axes([ax for ax in axes.flat])
+        plt.colorbar(im, cax=cax, **kw)
+        plt.margins(tight=True)
+        plt.show()
+        plt.close()
 
 def get_perf(target, output):
 

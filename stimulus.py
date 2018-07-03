@@ -148,22 +148,21 @@ class MultiStimulus:
 
             dir_ind = np.random.randint(1,par['num_motion_dirs']) if subset_dirs else np.random.randint(par['num_motion_dirs'])
             dir = self.motion_dirs[dir_ind]
-            m = 1#np.random.randint(2)
-            fix = np.random.randint(2)
+            m = 1 if np.random.randint(9) > 0 else 0
+            fix = 1 if np.random.randint(9) > 0 else 0 #np.random.randint(2) #
 
-            resp = np.zeros([par['num_motion_dirs']+1, par['n_neurons'], par['n_neurons']])
-            for mn in range(par['num_motion_dirs']+1):
+            resp = np.zeros([par['num_motion_dirs']+2, par['n_neurons'], par['n_neurons']])
+            for mn in range(par['num_motion_dirs']+2):
                 spatial = np.exp(-1/2 * (np.square(x - np.transpose(np.array([np.arange(par['n_neurons'])]*par['n_neurons']))) + np.square(y - np.array([np.arange(par['n_neurons'])]*par['n_neurons']))))
                 if mn == par['num_motion_dirs']:
                     resp[mn,:,:] = spatial * (1-m)
+                elif mn == (par['num_motion_dirs'] + 1):
+                    resp[mn,4:6,4:6] = np.float32(1) * fix
                 else:
                     ang_dist = np.angle(np.exp(1j*dir - 1j*self.motion_dirs[mn]))
                     motion = np.exp(-1/2 * np.square(ang_dist))
                     resp[mn,:,:] = motion * spatial * m
-            if fix:
-                resp[-1,4:6,4:6] = np.float32(1)
-            else:
-                resp = resp
+
 
             self.trial_info['input'][b] = np.array([x, y, dir_ind, m, fix])
             self.trial_info['neural_input'][b] = np.reshape(resp, (1,-1))

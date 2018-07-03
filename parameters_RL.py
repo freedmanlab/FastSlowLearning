@@ -56,10 +56,10 @@ par = {
     'motion_var'            : 1.0,
     'num_layers_ff'         : 2,
     'tol'                   : 0.01,
-    'subset_dirs_ff'        : False,
-    'subset_loc_ff'         : True,
-    'subset_dirs'           : False,
-    'subset_loc'            : True,
+    'subset_dirs_ff'        : True,
+    'subset_loc_ff'         : False,
+    'subset_dirs'           : True,
+    'subset_loc'            : False,
 
     # gFF model
     'forward_shape'         : [900,200],
@@ -116,8 +116,8 @@ par = {
 
     # Training specs
     'batch_size'            : 256,
-    'n_train_batches'       : 500,
-    'n_train_batches_full'  : 3000,
+    'n_train_batches'       : 700,
+    'n_train_batches_full'  : 2000,
 
     # Omega parameters
     'omega_c'               : 0.05,
@@ -248,10 +248,10 @@ def update_dependencies():
 
     # Number of output neurons
     par['n_output'] = 2
-    par['n_pol'] = par['num_motion_dirs'] + 1
+    par['n_pol'] = par['num_motion_dirs'] + 2
 
     # Number of input neurons
-    par['n_input'] = par['n_neurons'] * par['n_neurons'] * (par['num_motion_dirs']+1)
+    par['n_input'] = par['n_neurons'] * par['n_neurons'] * (par['num_motion_dirs']+2)
 
     # General network shape
     par['shape'] = (par['n_input'], par['n_hidden'], par['n_output'])
