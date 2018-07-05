@@ -8,7 +8,7 @@ import AdamOpt
 from parameters_RL import *
 import pickle
 
-par['forward_shape'] = [1000,200]
+par['forward_shape'] = [900,200,100]
 par['n_output'] = 2
 par['n_inter'] = 50
 par['n_latent'] = 10
@@ -175,10 +175,10 @@ def main():
             if i%500 == 0 and i!=0:
 
                 var_dict = sess.run(model.generative_vars)
-                with open('./savedir/generative_var_dict_with_fixation_v3.pkl', 'wb') as vf:
+                with open('./savedir/generative_var_dict_3_layers_latent_loss_4e-2.pkl', 'wb') as vf:
                     pickle.dump(var_dict, vf)
 
-                visualization(inputs, x_hat)
+                # visualization(inputs, x_hat)
 
                 for b in range(10):
 
@@ -198,8 +198,8 @@ def main():
 
                     fig, ax = plt.subplots(2,2,figsize=[8,8])
                     for a in range(2):
-                        inp = np.sum(np.reshape(neural_inputs[b], [10,10,10]), axis=a)
-                        hat = np.sum(np.reshape(x_hat[b], [10,10,10]), axis=a)
+                        inp = np.sum(np.reshape(neural_inputs[b], [9,10,10]), axis=a)
+                        hat = np.sum(np.reshape(x_hat[b], [9,10,10]), axis=a)
 
                         ax[a,0].set_title('Actual (Axis {})'.format(a))
                         ax[a,0].imshow(inp, clim=[0,1])
@@ -214,7 +214,7 @@ def main():
 
 def visualization(stim_real, x_hat):
     for b in range(10):
-        z = np.reshape(x_hat[b], (10,10,10))
+        z = np.reshape(x_hat[b], (9,10,10))
         y_sample_dir = int(stim_real[b,2])
         motion = int(stim_real[b,3])
         fix = int(stim_real[b,4])

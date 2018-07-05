@@ -116,7 +116,7 @@ par = {
 
     # Training specs
     'batch_size'            : 256,
-    'n_train_batches'       : 700,
+    'n_train_batches'       : 5001,
     'n_train_batches_full'  : 2000,
 
     # Omega parameters
@@ -248,10 +248,10 @@ def update_dependencies():
 
     # Number of output neurons
     par['n_output'] = 2
-    par['n_pol'] = par['num_motion_dirs'] + 2
+    par['n_pol'] = par['num_motion_dirs'] + 1
 
     # Number of input neurons
-    par['n_input'] = par['n_neurons'] * par['n_neurons'] * (par['num_motion_dirs']+2)
+    par['n_input'] = par['n_neurons'] * par['n_neurons'] * (par['num_motion_dirs']+1)
 
     # General network shape
     par['shape'] = (par['n_input'], par['n_hidden'], par['n_output'])
