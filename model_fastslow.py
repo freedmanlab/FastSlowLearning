@@ -280,7 +280,7 @@ def main(save_fn=None, gpu_id = None):
 
     # Reset TensorFlow graph
     tf.reset_default_graph()
-    f = open("./generative_var_dict_new2.pkl","rb")
+    f = open("./generative_var_dict_trial.pkl","rb")
     par['var_dict'] = pickle.load(f)
 
 

@@ -217,6 +217,8 @@ class MultiStimulus:
             self.trial_info['neural_input'][b] = np.reshape(resp, (1,-1))
             self.trial_info['desired_output'][b] = np.array([np.cos(dir), np.sin(dir)]) * m * (1-fix)
 
+            self.trial_info['neural_input'][b] += np.random.normal(0, 0.1, size=900)
+
         return self.trial_info
 
 

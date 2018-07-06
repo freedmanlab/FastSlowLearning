@@ -175,7 +175,7 @@ def main():
             if i%500 == 0:
 
                 var_dict = sess.run(model.generative_vars)
-                with open('./savedir/generative_var_dict_new2.pkl', 'wb') as vf:
+                with open('./savedir/generative_var_dict_trial.pkl', 'wb') as vf:
                     pickle.dump(var_dict, vf)
 
                 visualization(inputs, neural_inputs)
@@ -222,7 +222,7 @@ def visualization(stim_real, x_hat):
         vmax = np.max(z)
 
         fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(7,7))
-        fig.suptitle("y_sample_dir: "+str(y_sample_dir)+" motion: "+str(motion)+" fix: "+str(fix)+"\ny_sample: "+str(coord[0])+","+str(coord[1]))
+        fig.suptitle("y_sample_dir: "+str(y_sample_dir)+" motion: "+str(motion)+" fix: "+str(fix))
         i = 0
         for ax in axes.flat:
             im = ax.imshow(z[i,:,:], vmin=vmin, vmax=vmax, cmap='inferno')
@@ -232,8 +232,8 @@ def visualization(stim_real, x_hat):
         cax,kw = mpl.colorbar.make_axes([ax for ax in axes.flat])
         plt.colorbar(im, cax=cax, **kw)
         plt.margins(tight=True)
-        # plt.savefig('./savedir/recon_iter_trial{}.png'.format(b))
-        plt.show()
+        plt.savefig('./savedir/recon_iter_trial{}.png'.format(b))
+        # plt.show()
         plt.close()
 
 def get_perf(target, output):

@@ -70,8 +70,8 @@ def visualization(stim_real, x_hat, y_sample, full_output, iter):
 
         fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(7,7))
         # fig.suptitle("y_sample_dir: "+str(y_sample_dir)+" motion: "+str(motion)+" fix: "+str(fix))
-        fig.suptitle("y_sample: "+str(round(coord[0],3))+", "+str(round(coord[1],3))+"y_sample_dir: "+str(y_sample_dir) \
-        	+ "\nm: "+str(motion)+" fix: "+str(fix)+"\nfull_output: "+str(round(output[0],3))+", "+str(round(output[1],3)))
+        fig.suptitle("y_sample: "+str(round(coord[0],3))+","+str(round(coord[1],3))+" y_sample_dir: "+str(y_sample_dir) \
+        	+ "\nm: "+str(motion)+" fix: "+str(fix)+"\nfull_output: "+str(round(output[0],3))+","+str(round(output[1],3)))
         i = 0
         for ax in axes.flat:
             im = ax.imshow(z[i,:,:], vmin=vmin, vmax=vmax, cmap='inferno')
