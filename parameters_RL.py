@@ -116,7 +116,7 @@ par = {
 
     # Training specs
     'batch_size'            : 256,
-    'n_train_batches'       : 1000,
+    'n_train_batches'       : 10,
     'n_train_batches_full'  : 10001,
     'n_train_batches_gen'   : 5001,
 

@@ -222,7 +222,7 @@ def visualization(stim_real, x_hat):
         vmax = np.max(z)
 
         fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(7,7))
-        fig.suptitle("y_sample: "+str(y_sample_dir)+" motion: "+str(motion)+" fix: "+str(fix))
+        fig.suptitle("y_sample_dir: "+str(y_sample_dir)+" motion: "+str(motion)+" fix: "+str(fix)+"\ny_sample: "+str(coord[0])+","+str(coord[1]))
         i = 0
         for ax in axes.flat:
             im = ax.imshow(z[i,:,:], vmin=vmin, vmax=vmax, cmap='inferno')

@@ -57,7 +57,7 @@ def get_perf_angle(stim_real, output):
 
     return np.mean(ang_diff)
 
-def visualization(stim_real, x_hat, iter):
+def visualization(stim_real, x_hat, y_sample, iter):
     for b in range(10):
         z = np.reshape(x_hat[b], (par['num_motion_dirs']+1,par['n_neurons'],par['n_neurons']))
         y_sample_dir = int(stim_real[b,2])
@@ -65,9 +65,11 @@ def visualization(stim_real, x_hat, iter):
         fix = int(stim_real[b,4])
         vmin = np.min(z)
         vmax = np.max(z)
+        coord = y_sample[b]
 
         fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(7,7))
-        fig.suptitle("y_sample_dir: "+str(y_sample_dir)+" motion: "+str(motion)+" fix: "+str(fix))
+        # fig.suptitle("y_sample_dir: "+str(y_sample_dir)+" motion: "+str(motion)+" fix: "+str(fix))
+        fig.suptitle("y_sample_dir: "+str(y_sample_dir)+" motion: "+str(motion)+" fix: "+str(fix)+"\ny_sample: "+str(coord[0])+","+str(coord[1]))
         i = 0
         for ax in axes.flat:
             im = ax.imshow(z[i,:,:], vmin=vmin, vmax=vmax, cmap='inferno')

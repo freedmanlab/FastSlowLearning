@@ -138,7 +138,6 @@ class MultiStimulus:
 
     def task_go(self, variant='go', offset=0, subset_dirs=False, subset_loc=False):
 
-        # 0 = [motion, no fixation], 1 = [motion, fixation], 2 = [no motion, fixation]
         # t = np.random.choice(3, par['batch_size'])
         # x = np.zeros(par['batch_size'])
         # y = np.zeros(par['batch_size'])
@@ -176,10 +175,14 @@ class MultiStimulus:
         t = np.random.choice(9, par['batch_size'])
         x, y, dir, dir_ind = 0, 0, 0, 0
 
+        # 0 = [motion, no fixation], 1 = [motion, fixation], 2 = [no motion, fixation]
         for b in range(par['batch_size']):
             if t[b] == 0:
                 m = 1
                 fix = 0
+            elif t[b] == 1:
+                m = 1
+                fix = 1
             elif t[b] == 2:
                 m = 0
                 fix = 1
