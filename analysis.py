@@ -57,27 +57,26 @@ def get_perf_angle(stim_real, output):
 
     return np.mean(ang_diff)
 
-def visualization(stim_real, x_hat):
+def visualization(stim_real, x_hat, iter):
     for b in range(10):
-        z = np.reshape(x_hat[b], (10,10,10))
+        z = np.reshape(x_hat[b], (par['num_motion_dirs']+1,par['n_neurons'],par['n_neurons']))
         y_sample_dir = int(stim_real[b,2])
         motion = int(stim_real[b,3])
         fix = int(stim_real[b,4])
         vmin = np.min(z)
         vmax = np.max(z)
 
-        fig, axes = plt.subplots(nrows=3, ncols=4, figsize=(12,7))
-        fig.suptitle("y_sample: "+str(y_sample_dir)+" motion: "+str(motion)+" fix: "+str(fix))
+        fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(7,7))
+        fig.suptitle("y_sample_dir: "+str(y_sample_dir)+" motion: "+str(motion)+" fix: "+str(fix))
         i = 0
         for ax in axes.flat:
             im = ax.imshow(z[i,:,:], vmin=vmin, vmax=vmax, cmap='inferno')
             i += 1
-            if (i==10):
-                break
         cax,kw = mpl.colorbar.make_axes([ax for ax in axes.flat])
         plt.colorbar(im, cax=cax, **kw)
         plt.margins(tight=True)
-        plt.show()
+        plt.savefig("./savedir/iter_"+str(iter)+"_"+str(b)+".png")
+        # plt.show()
         plt.close()
 
 def x_hat_perf(stim_real, stim_in, x_hat):
@@ -90,9 +89,10 @@ def x_hat_perf(stim_real, stim_in, x_hat):
     print("x_hat direction\ty_sample direction")
     for b in range(10):#par['batch_size']):
         m = int(stim_real[b,3])
-        if m != 0:
+        fix = int(stim_real[b,4])
+        if m != 0 and fix !=0:
             # stim = np.reshape(stim_in[b], (9,10,10))
-            z = np.reshape(x_hat[b], (10,10,10)) # I've made many mistakes in the past with reshape... make sure the dimensions and order are correct!
+            z = np.reshape(x_hat[b], (9,10,10)) # I've made many mistakes in the past with reshape... make sure the dimensions and order are correct!
             # # z = z[:8,:,:] # I'm guessing the first 8 indices give motion direction
             # # v = np.exp(1j*np.arange(8)*np.pi/8) # will give you a vector of 8 directions along unit circle in complex coordinates
             # # v = np.reshape(v,(8,1,1))
@@ -178,7 +178,7 @@ def test(stim, model, task, sess, x, ys, ff):
 
             output, x_hat = sess.run([model.full_output, model.x_hat], feed_dict = {ys:y_hat})
             if r == 0:
-                visualization(stim_real, x_hat)
+                visualization(stim_real, x_hat, 0)
             # x_hat_perf(stim_real, stim_in, x_hat, par['n_train_batches_full'])
 
         if subset_loc:
@@ -195,17 +195,17 @@ def test(stim, model, task, sess, x, ys, ff):
         plt.colorbar()
         plt.clim(0,1)
         if ff:
-            plt.savefig("./FF_subset_loc_"+str(par['tol'])+"_new.png")
+            plt.savefig("./savedir/FF_subset_loc_"+str(par['tol'])+"_new.png")
         else:
-            plt.savefig("./Full_model_subset_loc_"+str(par['tol'])+"_new.png")
-        plt.show()
+            plt.savefig("./savedir/Full_model_subset_loc_"+str(par['tol'])+"_new.png")
+        # plt.show()
     if subset_dirs:
         counter_dirs[counter_dirs == 0] = 1
         plt.imshow(grid_dirs/counter_dirs, cmap='inferno')
         plt.colorbar()
         plt.clim(0,1)
         if ff:
-            plt.savefig(("./FF_subset_dirs_"+str(par['tol'])+"_new.png"))
+            plt.savefig(("./savedir/FF_subset_dirs_"+str(par['tol'])+"_new.png"))
         else:
-            plt.savefig("./Full_model_subset_dirs_"+str(par['tol'])+"_new.png")
-        plt.show()
+            plt.savefig("./savedir/Full_model_subset_dirs_"+str(par['tol'])+"_new.png")
+        # plt.show()

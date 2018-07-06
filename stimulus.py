@@ -138,35 +138,81 @@ class MultiStimulus:
 
     def task_go(self, variant='go', offset=0, subset_dirs=False, subset_loc=False):
 
-        for b in range(par['batch_size']):
-            if subset_loc:
-                x = np.random.randint(5,par['n_neurons'])
-                y = np.random.randint(5,par['n_neurons'])
-            else:
-                x = np.random.randint(par['n_neurons'])
-                y = np.random.randint(par['n_neurons'])
+        # 0 = [motion, no fixation], 1 = [motion, fixation], 2 = [no motion, fixation]
+        # t = np.random.choice(3, par['batch_size'])
+        # x = np.zeros(par['batch_size'])
+        # y = np.zeros(par['batch_size'])
+        # dir = np.zeros(par['batch_size'])
+        # dir_ind = np.zeros(par['batch_size'])
 
-            dir_ind = np.random.randint(1,par['num_motion_dirs']) if subset_dirs else np.random.randint(par['num_motion_dirs'])
-            dir = self.motion_dirs[dir_ind]
-            m = 1 if np.random.randint(9) > 0 else 0
-            fix = 0#1 if np.random.randint(9) > 0 else 0 #np.random.randint(2) #
+        # m = (t!=2).astype(int)
+        # fix = (t!=0).astype(int)
+
+        # resp = np.zeros([par['batch_size'], par['num_motion_dirs']+1, par['n_neurons'], par['n_neurons']])
+        # resp[m,par['num_motion_dirs'],4:6,4:6] = 0
+        # if subset_dirs:
+        #     x = np.random.choice(5, par['batch_size'])
+        #     y = np.random.choice(5, par['batch_size'])
+        #     dir_ind = np.random.randint(par['num_motion_dirs']-1, par['batch_size'])
+        # else:
+        #     x = np.random.choice(par['n_neurons'], par['batch_size'])
+        #     y = np.random.choice(par['n_neurons'], par['batch_size'])
+        #     dir_ind = np.random.randint(par['num_motion_dirs'], par['batch_size'])
+        # dir = self.motion_dirs[dir_ind]
+
+        # for b in range(par['batch_size']):
+        #     if m[b]:
+        #         for mn in range(par['num_motion_dirs']):
+        #             spatial = np.exp(-1/2 * (np.square(x[b] - np.transpose(np.array([np.arange(par['n_neurons'])]*par['n_neurons']))) + np.square(y[b] - np.array([np.arange(par['n_neurons'])]*par['n_neurons']))))
+        #             ang_dist = np.angle(np.exp(1j*dir - 1j*self.motion_dirs[mn]))
+        #             motion = np.exp(-1/2 * np.square(ang_dist))
+        #             resp[b,mn,:,:] = motion * spatial
+
+        # self.trial_info['input'] = np.array([x, y, dir_ind, m, fix])
+        # self.trial_info['neural_input'] = np.reshape(resp, (par['batch_size']))
+        # self.trial_info['desired_output'] = np.array([np.cos(dir), np.sin(dir)]) * m * (1-fix)
+
+
+        t = np.random.choice(9, par['batch_size'])
+        x, y, dir, dir_ind = 0, 0, 0, 0
+
+        for b in range(par['batch_size']):
+            if t[b] == 0:
+                m = 1
+                fix = 0
+            elif t[b] == 2:
+                m = 0
+                fix = 1
+            else:
+                m = 1
+                fix = 0
 
             resp = np.zeros([par['num_motion_dirs']+1, par['n_neurons'], par['n_neurons']])
-            for mn in range(par['num_motion_dirs']+1):
-                spatial = np.exp(-1/2 * (np.square(x - np.transpose(np.array([np.arange(par['n_neurons'])]*par['n_neurons']))) + np.square(y - np.array([np.arange(par['n_neurons'])]*par['n_neurons']))))
-                if mn == par['num_motion_dirs']:
-                    resp[mn,:,:] = spatial * (1-m)
-                # elif mn == (par['num_motion_dirs'] + 1):
-                    # resp[mn,4:6,4:6] = np.float32(1) * fix
+            if fix:
+                resp[par['num_motion_dirs'],4:6,4:6] = np.float32(1)
+            if m:
+                if subset_loc:
+                    x = np.random.randint(5,par['n_neurons'])
+                    y = np.random.randint(5,par['n_neurons'])
                 else:
+                    x = np.random.randint(par['n_neurons'])
+                    y = np.random.randint(par['n_neurons'])
+
+                dir_ind = np.random.randint(1,par['num_motion_dirs']) if subset_dirs else np.random.randint(par['num_motion_dirs'])
+                dir = self.motion_dirs[dir_ind]
+
+                for mn in range(par['num_motion_dirs']):
+                    spatial = np.exp(-1/2 * (np.square(x - np.transpose(np.array([np.arange(par['n_neurons'])]*par['n_neurons']))) + np.square(y - np.array([np.arange(par['n_neurons'])]*par['n_neurons']))))
                     ang_dist = np.angle(np.exp(1j*dir - 1j*self.motion_dirs[mn]))
                     motion = np.exp(-1/2 * np.square(ang_dist))
-                    resp[mn,:,:] = motion * spatial * m
+                    resp[mn,:,:] = motion * spatial
 
+                if fix:
+                    dir = 8
 
             self.trial_info['input'][b] = np.array([x, y, dir_ind, m, fix])
             self.trial_info['neural_input'][b] = np.reshape(resp, (1,-1))
-            self.trial_info['desired_output'][b] = np.array([np.cos(dir), np.sin(dir)])*m*(1-fix)
+            self.trial_info['desired_output'][b] = np.array([np.cos(dir), np.sin(dir)]) * m * (1-fix)
 
         return self.trial_info
 

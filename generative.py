@@ -8,7 +8,7 @@ import AdamOpt
 from parameters_RL import *
 import pickle
 
-par['forward_shape'] = [900,200,100]
+par['forward_shape'] = [900,200] #[900,300,150,80]
 par['n_output'] = 2
 par['n_inter'] = 50
 par['n_latent'] = 10
@@ -120,10 +120,10 @@ class Model:
         #self.task_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.y, labels=self.target_data, dim=1))
 
         self.task_loss = 0.*tf.reduce_mean(tf.square(self.y - self.target_data))
-        self.recon_loss = 1000*tf.reduce_mean(tf.square(self.x_hat - self.input_data))
+        self.recon_loss = 1*tf.reduce_mean(tf.square(self.x_hat - self.input_data))
         #self.recon_loss = 1e-3*tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.x_hat, labels=self.input_data))
 
-        self.latent_loss = 8e-2 * -0.5*tf.reduce_mean(tf.reduce_sum(1+self.si-tf.square(self.mu)-tf.exp(self.si),axis=-1))
+        self.latent_loss = 8e-5 * -0.5*tf.reduce_mean(tf.reduce_sum(1+self.si-tf.square(self.mu)-tf.exp(self.si),axis=-1))
 
         self.total_loss = self.task_loss + self.recon_loss + self.latent_loss
 
@@ -155,7 +155,7 @@ def main():
 
         sess.run(tf.global_variables_initializer())
 
-        for i in range(par['n_train_batches']):
+        for i in range(par['n_train_batches_gen']):
 
             name, inputs, neural_inputs, outputs = stim.generate_trial(0, False, False)
 
@@ -172,13 +172,13 @@ def main():
 
 
 
-            if i%500 == 0 and i!=0:
+            if i%500 == 0:
 
                 var_dict = sess.run(model.generative_vars)
-                with open('./savedir/generative_var_dict_3_layers_latent_loss_4e-2.pkl', 'wb') as vf:
+                with open('./savedir/generative_var_dict_new2.pkl', 'wb') as vf:
                     pickle.dump(var_dict, vf)
 
-                # visualization(inputs, x_hat)
+                visualization(inputs, neural_inputs)
 
                 for b in range(10):
 
@@ -221,7 +221,7 @@ def visualization(stim_real, x_hat):
         vmin = np.min(z)
         vmax = np.max(z)
 
-        fig, axes = plt.subplots(nrows=3, ncols=4, figsize=(12,7))
+        fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(7,7))
         fig.suptitle("y_sample: "+str(y_sample_dir)+" motion: "+str(motion)+" fix: "+str(fix))
         i = 0
         for ax in axes.flat:
@@ -232,6 +232,7 @@ def visualization(stim_real, x_hat):
         cax,kw = mpl.colorbar.make_axes([ax for ax in axes.flat])
         plt.colorbar(im, cax=cax, **kw)
         plt.margins(tight=True)
+        # plt.savefig('./savedir/recon_iter_trial{}.png'.format(b))
         plt.show()
         plt.close()
 
