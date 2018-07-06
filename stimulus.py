@@ -211,7 +211,7 @@ class MultiStimulus:
                     resp[mn,:,:] = motion * spatial
 
                 if fix:
-                    dir = 8
+                    dir_ind = 8
 
             self.trial_info['input'][b] = np.array([x, y, dir_ind, m, fix])
             self.trial_info['neural_input'][b] = np.reshape(resp, (1,-1))

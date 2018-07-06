@@ -57,7 +57,7 @@ def get_perf_angle(stim_real, output):
 
     return np.mean(ang_diff)
 
-def visualization(stim_real, x_hat, y_sample, iter):
+def visualization(stim_real, x_hat, y_sample, full_output, iter):
     for b in range(10):
         z = np.reshape(x_hat[b], (par['num_motion_dirs']+1,par['n_neurons'],par['n_neurons']))
         y_sample_dir = int(stim_real[b,2])
@@ -66,10 +66,12 @@ def visualization(stim_real, x_hat, y_sample, iter):
         vmin = np.min(z)
         vmax = np.max(z)
         coord = y_sample[b]
+        output = full_output[b]
 
         fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(7,7))
         # fig.suptitle("y_sample_dir: "+str(y_sample_dir)+" motion: "+str(motion)+" fix: "+str(fix))
-        fig.suptitle("y_sample_dir: "+str(y_sample_dir)+" motion: "+str(motion)+" fix: "+str(fix)+"\ny_sample: "+str(coord[0])+","+str(coord[1]))
+        fig.suptitle("y_sample: "+str(round(coord[0],3))+", "+str(round(coord[1],3))+"y_sample_dir: "+str(y_sample_dir) \
+        	+ "\nm: "+str(motion)+" fix: "+str(fix)+"\nfull_output: "+str(round(output[0],3))+", "+str(round(output[1],3)))
         i = 0
         for ax in axes.flat:
             im = ax.imshow(z[i,:,:], vmin=vmin, vmax=vmax, cmap='inferno')
@@ -180,7 +182,7 @@ def test(stim, model, task, sess, x, ys, ff):
 
             output, x_hat = sess.run([model.full_output, model.x_hat], feed_dict = {ys:y_hat})
             if r == 0:
-                visualization(stim_real, x_hat, 0)
+                visualization(stim_real, x_hat, y_hat, output, iter)
             # x_hat_perf(stim_real, stim_in, x_hat, par['n_train_batches_full'])
 
         if subset_loc:

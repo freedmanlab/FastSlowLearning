@@ -360,7 +360,7 @@ def main(save_fn=None, gpu_id = None):
                     conn_acc = get_perf(y_sample, full_output, ff=False)
                     print('Iter ', i, 'Task name ', name, ' accuracy', conn_acc, ' loss ', full_loss, ' latent_loss ',latent_loss, ' mu ', [np.mean(mu), np.std(mu)], ' si ', [np.mean(si), np.std(si)])
                 if i%500 == 0 and i!=0:
-                    visualization(stim_real, x_hat, y_sample, i)
+                    visualization(stim_real, x_hat, y_sample, full_output, i)
 
                 # if i > 500:
                     # x_hats.append(x_hat)
