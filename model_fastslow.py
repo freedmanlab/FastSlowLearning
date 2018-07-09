@@ -114,6 +114,7 @@ class Model:
             else:
                 h_out.append(act)
         self.x_hat = h_out[-1]
+        # self.x_hat += np.random.normal(0, 0.1, size=900)
 
         # Skipped connection model (muted for now)
         # W = np.float32(np.random.normal(0,1,size=[50,par['n_input']]))
@@ -330,6 +331,9 @@ def main(save_fn=None, gpu_id = None):
 
                 if i%50 == 0:
                     ff_acc = get_perf(y_hat, ff_output, ff=True)
+                    # for b in range(20):
+                        # print("m: ", stim_real[b,3], ", fix: ": stim_real[b,4])
+                        # print("y_hat: ", y_hat[b], ", output: ", ff_output[b], "\n")
                     print('Iter ', i, 'Task name ', name, ' accuracy', ff_acc, ' loss ', ff_loss)
             print('FF Model execution complete.\n')
 

@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 #from parameters import par
 from parameters_RL import par
 
@@ -172,7 +173,7 @@ class MultiStimulus:
         # self.trial_info['desired_output'] = np.array([np.cos(dir), np.sin(dir)]) * m * (1-fix)
 
 
-        t = np.random.choice(9, par['batch_size'])
+        t = np.random.choice(4, par['batch_size'])
         x, y, dir, dir_ind = 0, 0, 0, 0
 
         # 0 = [motion, no fixation], 1 = [motion, fixation], 2 = [no motion, fixation]
@@ -190,9 +191,11 @@ class MultiStimulus:
                 m = 1
                 fix = 0
 
+            mult_motion = np.random.choice([1.0, 1.5, 2.0])
+            mult_fix = np.random.choice([1.0, 1.5, 2.0])
             resp = np.zeros([par['num_motion_dirs']+1, par['n_neurons'], par['n_neurons']])
             if fix:
-                resp[par['num_motion_dirs'],4:6,4:6] = np.float32(1)
+                resp[par['num_motion_dirs'],3:7,3:7] = np.float32(1) * mult_fix
             if m:
                 if subset_loc:
                     x = np.random.randint(5,par['n_neurons'])
@@ -208,7 +211,7 @@ class MultiStimulus:
                     spatial = np.exp(-1/2 * (np.square(x - np.transpose(np.array([np.arange(par['n_neurons'])]*par['n_neurons']))) + np.square(y - np.array([np.arange(par['n_neurons'])]*par['n_neurons']))))
                     ang_dist = np.angle(np.exp(1j*dir - 1j*self.motion_dirs[mn]))
                     motion = np.exp(-1/2 * np.square(ang_dist))
-                    resp[mn,:,:] = motion * spatial
+                    resp[mn,:,:] = motion * spatial * mult_motion
 
                 if fix:
                     dir_ind = 8
@@ -501,7 +504,37 @@ class MultiStimulus:
 
         return self.trial_info
 
+def visualization(stim_real, x_hat, y_sample, full_output, iter):
+    for b in range(10):
+        z = np.reshape(x_hat[b], (par['num_motion_dirs']+1,par['n_neurons'],par['n_neurons']))
+        y_sample_dir = int(stim_real[b,2])
+        motion = int(stim_real[b,3])
+        fix = int(stim_real[b,4])
+        vmin = np.min(z)
+        vmax = np.max(z)
+        coord = y_sample[b]
+        output = full_output[b]
+
+        fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(7,7))
+        # fig.suptitle("y_sample_dir: "+str(y_sample_dir)+" motion: "+str(motion)+" fix: "+str(fix))
+        fig.suptitle("y_sample: "+str(round(coord[0],3))+","+str(round(coord[1],3))+" y_sample_dir: "+str(y_sample_dir) \
+            + "\nm: "+str(motion)+" fix: "+str(fix)+"\nfull_output: "+str(round(output[0],3))+","+str(round(output[1],3)))
+        i = 0
+        for ax in axes.flat:
+            im = ax.imshow(z[i,:,:], vmin=vmin, vmax=vmax, cmap='inferno')
+            i += 1
+        cax,kw = mpl.colorbar.make_axes([ax for ax in axes.flat])
+        plt.colorbar(im, cax=cax, **kw)
+        plt.margins(tight=True)
+        # plt.savefig("./savedir/iter_"+str(iter)+"_"+str(b)+".png")
+        # plt.show()
+        plt.close()
+
 ### EXAMPLE ###
+# stim = MultiStimulus()
+# name, stim_real, stim_in, y_hat = stim.generate_trial(0, subset_dirs=par['subset_dirs_ff'], subset_loc=par['subset_loc_ff'])
+# visualization(stim_real, stim_in, y_hat, y_hat, 0)
+
 """
 st = MultiStimulus()
 for i in range(len(st.task_types)):

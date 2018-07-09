@@ -8,7 +8,7 @@ import AdamOpt
 from parameters_RL import *
 import pickle
 
-par['forward_shape'] = [900,200] #[900,300,150,80]
+par['forward_shape'] = [900,200,80] #[900,300,150,80]
 par['n_output'] = 2
 par['n_inter'] = 50
 par['n_latent'] = 10
