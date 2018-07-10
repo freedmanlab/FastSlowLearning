@@ -57,9 +57,9 @@ par = {
     'num_layers_ff'         : 3,
     'tol'                   : 0.1,
     'subset_dirs_ff'        : False,
-    'subset_loc_ff'         : False,
+    'subset_loc_ff'         : True,
     'subset_dirs'           : False,
-    'subset_loc'            : False,
+    'subset_loc'            : True,
 
     # gFF model
     'forward_shape'         : [900,200,80],

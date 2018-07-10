@@ -190,12 +190,14 @@ class MultiStimulus:
             else:
                 m = 1
                 fix = 0
+            fix = 0
 
-            mult_motion = np.random.choice([1.0, 1.5, 2.0])
-            mult_fix = np.random.choice([1.0, 1.5, 2.0])
+            mult_motion = np.random.choice([0.5, 1.0, 2.0, 3.0])
+            mult_fix = np.random.choice([0.5, 1.0, 2.0, 3.0])
             resp = np.zeros([par['num_motion_dirs']+1, par['n_neurons'], par['n_neurons']])
             if fix:
                 resp[par['num_motion_dirs'],3:7,3:7] = np.float32(1) * mult_fix
+                dir_ind = 8
             if m:
                 if subset_loc:
                     x = np.random.randint(5,par['n_neurons'])

@@ -6,6 +6,7 @@ import os
 import stimulus
 import AdamOpt
 from parameters_RL import *
+from scipy.stats import pearsonr
 import pickle
 
 par['forward_shape'] = [900,200,80] #[900,300,150,80]
@@ -160,8 +161,11 @@ def main():
             name, inputs, neural_inputs, outputs = stim.generate_trial(0, False, False)
 
             feed_dict = {x:neural_inputs, y:outputs}
-            _, loss, recon_loss, latent_loss, y_hat, x_hat, mu, sigma = sess.run([model.train_op, model.task_loss, \
-                model.recon_loss, model.latent_loss, model.y, model.x_hat, model.mu, model.si], feed_dict=feed_dict)
+            _, loss, recon_loss, latent_loss, y_hat, x_hat, mu, sigma, latent_sample = sess.run([model.train_op, model.task_loss, \
+                model.recon_loss, model.latent_loss, model.y, model.x_hat, model.mu, model.si, model.latent_sample], feed_dict=feed_dict)
+
+            
+
 
             #accuracy = np.mean(np.equal(lab, np.argmax(y_hat, axis=1)))
 
@@ -173,6 +177,17 @@ def main():
 
 
             if i%500 == 0:
+
+                correlation = np.zeros((par['n_latent'], 6))
+                for l in range(par['n_latent']):
+                # for latent_sample in latent_sample:
+                    correlation[l,0] += pearsonr(latent_sample[:,l], inputs[:,0])[0] #x
+                    correlation[l,1] += pearsonr(latent_sample[:,l], inputs[:,1])[0] #y
+                    correlation[l,2] += pearsonr(latent_sample[:,l], inputs[:,2])[0] #dir_ind
+                    correlation[l,3] += pearsonr(latent_sample[:,l], inputs[:,3])[0] #m
+                    correlation[l,4] += pearsonr(latent_sample[:,l], outputs[:,0])[0]
+                    correlation[l,5] += pearsonr(latent_sample[:,l], outputs[:,1])[0]
+                print(correlation)
 
                 var_dict = sess.run(model.generative_vars)
                 with open('./savedir/generative_var_dict_trial.pkl', 'wb') as vf:

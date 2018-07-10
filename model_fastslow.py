@@ -133,7 +133,7 @@ class Model:
 
         # Trainable variables for FF / Generative / Connection
         self.variables_ff = [var for var in tf.trainable_variables() if var.op.name.find('ff')==0]
-        self.variables_full = [var for var in tf.trainable_variables() if var.op.name.find('conn')==0]
+        self.variables_full = [var for var in tf.trainable_variables() if (var.op.name.find('conn')==0)]
 
         adam_optimizer_ff = AdamOpt(self.variables_ff, learning_rate = par['learning_rate'])
         adam_optimizer_full = AdamOpt(self.variables_full, learning_rate = par['learning_rate'])
