@@ -9,10 +9,10 @@ from parameters_RL import *
 from scipy.stats import pearsonr
 import pickle
 
-par['forward_shape'] = [900,200,80] #[900,300,150,80]
+par['forward_shape'] = [800,200,80] #[900,300,150,80]
 par['n_output'] = 2
 par['n_inter'] = 50
-par['n_latent'] = 10
+par['n_latent'] = 4
 
 # Ignore startup TensorFlow warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
@@ -184,10 +184,22 @@ def main():
                     correlation[l,0] += pearsonr(latent_sample[:,l], inputs[:,0])[0] #x
                     correlation[l,1] += pearsonr(latent_sample[:,l], inputs[:,1])[0] #y
                     correlation[l,2] += pearsonr(latent_sample[:,l], inputs[:,2])[0] #dir_ind
-                    correlation[l,3] += pearsonr(latent_sample[:,l], inputs[:,3])[0] #m
+                    # correlation[l,3] += pearsonr(latent_sample[:,l], inputs[:,3])[0] #m                 
                     correlation[l,4] += pearsonr(latent_sample[:,l], outputs[:,0])[0]
                     correlation[l,5] += pearsonr(latent_sample[:,l], outputs[:,1])[0]
-                print(correlation)
+                print(np.round(correlation,3))
+
+                m = []
+                for motion in range(par['num_motion_dirs']):
+                    m.append(np.where(inputs[:,2]==motion))
+                
+                temp = np.zeros((4,8))
+                for dir in range(par['num_motion_dirs']):
+                    temp[:,dir] = np.round(np.mean(latent_sample[m[dir]], axis=0),3)
+                plt.imshow(temp, cmap='inferno')
+                plt.colorbar()
+                plt.show()
+
 
                 var_dict = sess.run(model.generative_vars)
                 with open('./savedir/generative_var_dict_trial.pkl', 'wb') as vf:
@@ -213,8 +225,8 @@ def main():
 
                     fig, ax = plt.subplots(2,2,figsize=[8,8])
                     for a in range(2):
-                        inp = np.sum(np.reshape(neural_inputs[b], [9,10,10]), axis=a)
-                        hat = np.sum(np.reshape(x_hat[b], [9,10,10]), axis=a)
+                        inp = np.sum(np.reshape(neural_inputs[b], [8,10,10]), axis=a)
+                        hat = np.sum(np.reshape(x_hat[b], [8,10,10]), axis=a)
 
                         ax[a,0].set_title('Actual (Axis {})'.format(a))
                         ax[a,0].imshow(inp, clim=[0,1])
@@ -229,7 +241,7 @@ def main():
 
 def visualization(stim_real, x_hat):
     for b in range(10):
-        z = np.reshape(x_hat[b], (9,10,10))
+        z = np.reshape(x_hat[b], (8,10,10))
         y_sample_dir = int(stim_real[b,2])
         motion = int(stim_real[b,3])
         fix = int(stim_real[b,4])
@@ -242,7 +254,7 @@ def visualization(stim_real, x_hat):
         for ax in axes.flat:
             im = ax.imshow(z[i,:,:], vmin=vmin, vmax=vmax, cmap='inferno')
             i += 1
-            if (i==10):
+            if (i==8):
                 break
         cax,kw = mpl.colorbar.make_axes([ax for ax in axes.flat])
         plt.colorbar(im, cax=cax, **kw)

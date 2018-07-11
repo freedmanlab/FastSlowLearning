@@ -252,7 +252,7 @@ def update_dependencies():
     par['n_pol'] = par['num_motion_dirs'] + 1
 
     # Number of input neurons
-    par['n_input'] = par['n_neurons'] * par['n_neurons'] * (par['num_motion_dirs']+1)
+    par['n_input'] = par['n_neurons'] * par['n_neurons'] * (par['num_motion_dirs'])
 
     # General network shape
     par['shape'] = (par['n_input'], par['n_hidden'], par['n_output'])
