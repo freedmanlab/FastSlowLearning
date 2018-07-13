@@ -62,7 +62,7 @@ par = {
     'subset_loc'            : True,
 
     # gFF model
-    'forward_shape'         : [900,200,80],
+    'forward_shape'         : [800,200,80], #[900,300,150,80]
     'n_inter'               : 50,
     'n_latent'              : 10,
     'n_layer'               : 5,

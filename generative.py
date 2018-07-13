@@ -9,10 +9,6 @@ from parameters_RL import *
 from scipy.stats import pearsonr
 import pickle
 
-par['forward_shape'] = [800,200,80] #[900,300,150,80]
-par['n_output'] = 2
-par['n_inter'] = 50
-par['n_latent'] = 4
 
 # Ignore startup TensorFlow warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
@@ -40,8 +36,8 @@ class Model:
                 self.var_dict['W_in{}'.format(h)] = tf.get_variable('W_in{}'.format(h), shape=[par['forward_shape'][h],par['forward_shape'][h+1]])
                 self.var_dict['b_hid{}'.format(h)] = tf.get_variable('b_hid{}'.format(h), shape=[par['forward_shape'][h+1]])
 
-            self.var_dict['W_out'] = tf.get_variable('W_out', shape=[par['forward_shape'][-1],par['n_output']])
-            self.var_dict['b_out'] = tf.get_variable('b_out', shape=par['n_output'])
+            # self.var_dict['W_out'] = tf.get_variable('W_out', shape=[par['forward_shape'][-1],par['n_output']])
+            # self.var_dict['b_out'] = tf.get_variable('b_out', shape=par['n_output'])
 
         with tf.variable_scope('latent_interface'):
 
@@ -200,7 +196,7 @@ def main():
                 for motion in range(par['num_motion_dirs']):
                     m.append(np.where(inputs[:,2]==motion))
                 
-                temp = np.zeros((4,8))
+                temp = np.zeros((par['n_latent'],8))
                 for dir in range(par['num_motion_dirs']):
                     temp[:,dir] = np.round(np.mean(latent_sample[m[dir]], axis=0),3)
                 plt.imshow(temp, cmap='inferno')
