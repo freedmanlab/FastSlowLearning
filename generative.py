@@ -123,7 +123,7 @@ class Model:
 
         #self.task_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.y, labels=self.target_data, dim=1))
 
-        self.task_loss = 0.1*tf.reduce_mean(tf.square(self.y - self.target_data))
+        self.task_loss = 0.05*tf.reduce_mean(tf.square(self.y - self.target_data))
         self.recon_loss = 1*tf.reduce_mean(tf.square(self.x_hat - self.input_data))
         #self.recon_loss = 1e-3*tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.x_hat, labels=self.input_data))
 
@@ -173,35 +173,37 @@ def main():
             #accuracy = np.mean(np.equal(lab, np.argmax(y_hat, axis=1)))
 
             if i%50 == 0:
-                acc = get_perf(inputs,y_hat)
-                print('{} | Reconstr. Loss: {:.3f} | Latent Loss: {:.3f} | <Sig>: {:.3f} +/- {:.3f}'.format( \
-                    i, recon_loss, latent_loss, np.mean(sigma), np.std(sigma)))
+                acc = get_perf(outputs,y_hat)
+                print('{} | Reconstr. Loss: {:.3f} | Latent Loss: {:.3f} | Accuracy: {:.3f} | <Sig>: {:.3f} +/- {:.3f}'.format( \
+                    i, recon_loss, latent_loss, acc, np.mean(sigma), np.std(sigma)))
 
 
 
             if i%500 == 0:
 
-                correlation = np.zeros((par['n_latent'], 6))
+                correlation = np.zeros((par['n_latent'], 7))
                 for l in range(par['n_latent']):
                 # for latent_sample in latent_sample:
                     correlation[l,0] += pearsonr(latent_sample[:,l], inputs[:,0])[0] #x
                     correlation[l,1] += pearsonr(latent_sample[:,l], inputs[:,1])[0] #y
                     correlation[l,2] += pearsonr(latent_sample[:,l], inputs[:,2])[0] #dir_ind
-                    # correlation[l,3] += pearsonr(latent_sample[:,l], inputs[:,3])[0] #m                 
-                    correlation[l,4] += pearsonr(latent_sample[:,l], outputs[:,0])[0]
-                    correlation[l,5] += pearsonr(latent_sample[:,l], outputs[:,1])[0]
+                    correlation[l,3] += pearsonr(latent_sample[:,l], inputs[:,3])[0] #m
+                    correlation[l,4] += pearsonr(latent_sample[:,l], inputs[:,4])[0] #fix
+                    correlation[l,5] += pearsonr(latent_sample[:,l], outputs[:,0])[0] #motion_x
+                    correlation[l,6] += pearsonr(latent_sample[:,l], outputs[:,1])[0] #motion_y
+                print(['loc_x','loc_y','dir','m','fix','mot_x','mot_y'])
                 print(np.round(correlation,3))
 
-                m = []
-                for motion in range(par['num_motion_dirs']):
-                    m.append(np.where(inputs[:,2]==motion))
+                # m = []
+                # for motion in range(par['num_motion_dirs']):
+                #     m.append(np.where(inputs[:,2]==motion))
                 
-                temp = np.zeros((par['n_latent'],8))
-                for dir in range(par['num_motion_dirs']):
-                    temp[:,dir] = np.round(np.mean(latent_sample[m[dir]], axis=0),3)
-                plt.imshow(temp, cmap='inferno')
-                plt.colorbar()
-                plt.show()
+                # temp = np.zeros((par['n_latent'],8))
+                # for dir in range(par['num_motion_dirs']):
+                #     temp[:,dir] = np.round(np.mean(latent_sample[m[dir]], axis=0),3)
+                # plt.imshow(temp, cmap='inferno')
+                # plt.colorbar()
+                # plt.show()
 
 
                 var_dict = sess.run(model.generative_vars)
@@ -228,8 +230,8 @@ def main():
 
                     fig, ax = plt.subplots(2,2,figsize=[8,8])
                     for a in range(2):
-                        inp = np.sum(np.reshape(neural_inputs[b], [8,10,10]), axis=a)
-                        hat = np.sum(np.reshape(x_hat[b], [8,10,10]), axis=a)
+                        inp = np.sum(np.reshape(neural_inputs[b], [9,10,10]), axis=a)
+                        hat = np.sum(np.reshape(x_hat[b], [9,10,10]), axis=a)
 
                         ax[a,0].set_title('Actual (Axis {})'.format(a))
                         ax[a,0].imshow(inp, clim=[0,1])
@@ -244,20 +246,20 @@ def main():
 
 def visualization(stim_real, x_hat):
     for b in range(10):
-        z = np.reshape(x_hat[b], (8,10,10))
+        z = np.reshape(x_hat[b], (9,10,10))
         y_sample_dir = int(stim_real[b,2])
         motion = int(stim_real[b,3])
         fix = int(stim_real[b,4])
         vmin = np.min(z)
         vmax = np.max(z)
 
-        fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(7,7))
+        fig, axes = plt.subplots(nrows=4, ncols=3, figsize=(7,7))
         fig.suptitle("y_sample_dir: "+str(y_sample_dir)+" motion: "+str(motion)+" fix: "+str(fix))
         i = 0
         for ax in axes.flat:
             im = ax.imshow(z[i,:,:], vmin=vmin, vmax=vmax, cmap='inferno')
             i += 1
-            if (i==8):
+            if (i==9):
                 break
         cax,kw = mpl.colorbar.make_axes([ax for ax in axes.flat])
         plt.colorbar(im, cax=cax, **kw)
@@ -273,7 +275,7 @@ def get_perf(target, output):
     only examine time points when test stimulus is on
     in another words, when target[:,:,-1] is not 0
     """
-    return np.sum(np.float32((np.absolute(target[:,0] - output[:,0]) < 0.05) * (np.absolute(target[:,1] - output[:,1]) < 0.05)))/par['batch_size']
+    return np.sum(np.float32((np.absolute(target[:,0] - output[:,0]) < par['tol']) * (np.absolute(target[:,1] - output[:,1]) < par['tol'])))/par['batch_size']
 
 
 

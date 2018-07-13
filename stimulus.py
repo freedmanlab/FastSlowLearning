@@ -190,14 +190,11 @@ class MultiStimulus:
             else:
                 m = 1
                 fix = 0
-            fix = 0
-            m = 1
 
-            # mult_motion = np.random.choice([0.5, 1.0, 2.0, 3.0])
-            # mult_fix = np.random.choice([0.5, 1.0, 2.0, 3.0])
-            mult_fix = 1
-            mult_motion = 1
-            resp = np.zeros([par['num_motion_dirs'], par['n_neurons'], par['n_neurons']])
+            mult_motion = np.random.choice([0.5, 1.0, 2.0, 3.0]) if par['variable_stim'] else 1
+            mult_fix = np.random.choice([0.5, 1.0, 2.0, 3.0]) if par['variable_stim'] else 1
+
+            resp = np.zeros([par['num_motion_dirs']+1, par['n_neurons'], par['n_neurons']])
             if fix:
                 resp[par['num_motion_dirs'],3:7,3:7] = np.float32(1) * mult_fix
                 dir_ind = 8
@@ -225,7 +222,7 @@ class MultiStimulus:
             self.trial_info['neural_input'][b] = np.reshape(resp, (1,-1))
             self.trial_info['desired_output'][b] = np.array([np.cos(dir), np.sin(dir)]) * m * (1-fix)
 
-            # self.trial_info['neural_input'][b] += np.random.normal(0, 0.1, size=900)
+            self.trial_info['neural_input'][b] += np.random.normal(0, 0.1, size=900)
 
         return self.trial_info
 

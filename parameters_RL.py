@@ -62,9 +62,10 @@ par = {
     'subset_loc'            : True,
 
     # gFF model
-    'forward_shape'         : [800,200,80], #[900,300,150,80]
+    'variable_stim'         : True,
+    'forward_shape'         : [900,200,80], #[900,300,150,80]
     'n_inter'               : 50,
-    'n_latent'              : 10,
+    'n_latent'              : 5,
     'n_layer'               : 5,
 
     # Connected FF and Gen Model
@@ -253,7 +254,7 @@ def update_dependencies():
     par['n_pol'] = par['num_motion_dirs'] + 1
 
     # Number of input neurons
-    par['n_input'] = par['n_neurons'] * par['n_neurons'] * (par['num_motion_dirs'])
+    par['n_input'] = par['n_neurons'] * par['n_neurons'] * (par['num_motion_dirs']+1)
 
     # General network shape
     par['shape'] = (par['n_input'], par['n_hidden'], par['n_output'])
