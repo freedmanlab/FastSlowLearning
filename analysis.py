@@ -27,17 +27,14 @@ def heat_map(input, target, output, grid, counter,loc=True,ff=True):
     return grid, counter
 
 
-def get_perf(target, output,ff):
+def get_perf(target, output):
 
     """
     Calculate task accuracy by comparing the actual network output to the desired output
     only examine time points when test stimulus is on
     in another words, when target[:,:,-1] is not 0
     """
-    if ff:
-        num_total = par['batch_size']
-    else:
-        num_total = par['n_ys']
+    num_total = len(target)
     return np.sum(np.float32((np.absolute(target[:,0] - output[:,0]) < par['tol']) * (np.absolute(target[:,1] - output[:,1]) < par['tol'])))/num_total
 
 def get_perf_angle(stim_real, output):
@@ -191,7 +188,9 @@ def test(stim, model, task, sess, x, ys, ff, gff):
             grid_loc, counter_loc = heat_map(stim_real, y_hat, output, grid_loc, counter_loc, loc=True, ff=ff)
         if subset_dirs:
             grid_dirs, counter_dirs = heat_map(stim_real, y_hat, output, grid_dirs, counter_dirs, loc=False, ff=ff)
-        acc += get_perf(y_hat, output, ff)
+        
+        ind = np.intersect1d(np.argwhere(stim_real[:,3]==1), np.argwhere(stim_real[:,4]==0))
+        acc += get_perf(y_hat[ind], output[ind])
 
     print("Testing accuracy: ", acc/num_reps, "\n")
 
@@ -204,6 +203,7 @@ def test(stim, model, task, sess, x, ys, ff, gff):
             plt.savefig("./savedir/FF_subset_loc_"+str(par['tol'])+"_new.png")
         else:
             plt.savefig("./savedir/Full_model_subset_loc_"+str(par['tol'])+"_new.png")
+        plt.close()
         # plt.show()
     if subset_dirs:
         counter_dirs[counter_dirs == 0] = 1
@@ -214,4 +214,5 @@ def test(stim, model, task, sess, x, ys, ff, gff):
             plt.savefig(("./savedir/FF_subset_dirs_"+str(par['tol'])+"_new.png"))
         else:
             plt.savefig("./savedir/Full_model_subset_dirs_"+str(par['tol'])+"_new.png")
+        plt.close()
         # plt.show()

@@ -17,10 +17,11 @@ os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
 
 class Model:
 
-    def __init__(self, input_data, target_data):
+    def __init__(self, input_data, target_data, alpha):
 
         self.input_data = input_data
         self.target_data = target_data
+        self.alpha = alpha
 
         self.declare_variables()
 
@@ -65,9 +66,9 @@ class Model:
                 self.var_dict['b_rec{}'.format(h)] = tf.get_variable('b_rec{}'.format(h), shape=[1,par['forward_shape'][h]])
 
         with tf.variable_scope('task'):
-            self.var_dict['W_layer_in'] = tf.get_variable('W_layer_in', shape=[par['n_latent'], par['n_layer']])
-            self.var_dict['b_layer'] = tf.get_variable('b_layer', shape=[1,par['n_layer']])
-            self.var_dict['W_layer_out'] = tf.get_variable('W_layer_out', shape=[par['n_layer'],par['n_output']])
+            # self.var_dict['W_layer_in'] = tf.get_variable('W_layer_in', shape=[par['n_latent'], par['n_layer']])
+            # self.var_dict['b_layer'] = tf.get_variable('b_layer', shape=[1,par['n_layer']])
+            self.var_dict['W_layer_out'] = tf.get_variable('W_layer_out', shape=[par['n_latent'],par['n_output']])
             self.var_dict['b_layer_out'] = tf.get_variable('b_layer_out', shape=[1,par['n_output']])
 
     def run_model(self):
@@ -80,22 +81,22 @@ class Model:
                 inp = h_in[-1]
 
             act = inp @ self.var_dict['W_in{}'.format(h)] + self.var_dict['b_hid{}'.format(h)]
-            act = tf.nn.relu(act + 0.*tf.random_normal(act.shape))
+            act = tf.nn.dropout(tf.nn.relu(act + 0.*tf.random_normal(act.shape)), 1)
             #act = tf.nn.dropout(act, 0.8)
             h_in.append(act)
 
         # self.y = h_in[-1] @ self.var_dict['W_out'] + self.var_dict['b_out']
-        self.pre = tf.nn.relu(h_in[-1] @ self.var_dict['W_pre'] + self.var_dict['b_pre'])
+        self.pre = tf.nn.dropout(tf.nn.relu(h_in[-1] @ self.var_dict['W_pre'] + self.var_dict['b_pre']), 1)
 
         self.mu = self.pre @ self.var_dict['W_mu_in'] + self.var_dict['b_mu']
         self.si = self.pre @ self.var_dict['W_si_in'] + self.var_dict['b_si']
 
         ### Copy from here down to include generative setup in full network
         self.latent_sample = self.mu + tf.exp(0.5*self.si)*tf.random_normal(self.si.shape)
-        self.layer = self.latent_sample @ self.var_dict['W_layer_in'] + self.var_dict['b_layer']
-        self.y = self.layer @ self.var_dict['W_layer_out'] + self.var_dict['b_layer_out']
+        # self.layer = self.latent_sample @ self.var_dict['W_layer_in'] + self.var_dict['b_layer']
+        self.y = self.latent_sample @ self.var_dict['W_layer_out'] + self.var_dict['b_layer_out']
 
-        self.post = tf.nn.relu(self.latent_sample @ self.var_dict['W_lat'] + self.var_dict['b_post'])
+        self.post = tf.nn.dropout(tf.nn.relu(self.latent_sample @ self.var_dict['W_lat'] + self.var_dict['b_post']), 1)
         #self.post = tf.nn.relu(self.mu @ self.var_dict['W_lat'] + self.var_dict['b_post'])
 
         h_out = []
@@ -109,7 +110,7 @@ class Model:
 
             act = inp @ W + self.var_dict['b_rec{}'.format(h)]
             if h is not 0:
-                act = tf.nn.relu(act + 0.*tf.random_normal(act.shape))
+                act = tf.nn.dropout(tf.nn.relu(act + 0.*tf.random_normal(act.shape)), 1)
                 #act = tf.nn.dropout(act, 0.8)
                 h_out.append(act)
             else:
@@ -125,7 +126,7 @@ class Model:
 
         #self.task_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.y, labels=self.target_data, dim=1))
 
-        self.task_loss = 0.05*tf.reduce_mean(tf.square(self.y - self.target_data))
+        self.task_loss = self.alpha*tf.reduce_mean(tf.square(self.y - self.target_data))
         self.recon_loss = 1*tf.reduce_mean(tf.square(self.x_hat - self.input_data))
         #self.recon_loss = 1e-3*tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.x_hat, labels=self.input_data))
 
@@ -150,10 +151,11 @@ def main():
 
     x = tf.placeholder(tf.float32, [par['batch_size'], par['forward_shape'][0]], 'stim')
     y = tf.placeholder(tf.float32, [par['batch_size'], par['n_output']], 'out')
+    alpha = tf.placeholder(tf.float32, [], 'alpha')
 
     #with tf.device('/gpu:0'):
     #    model = Model(x, y)
-    model = Model(x, y)
+    model = Model(x, y, alpha)
 
     stim = stimulus.MultiStimulus()
 
@@ -166,17 +168,24 @@ def main():
 
         for i in range(par['n_train_batches_gen']):
 
+            if i%2 == 0:
+                par['subset_loc'] = True
+                alpha_val = 0.05
+            else:
+                par['subset_loc'] = False
+                alpha_val = 0
             name, inputs, neural_inputs, outputs = stim.generate_trial(0, par['subset_dirs'], par['subset_loc'])
 
-            feed_dict = {x:neural_inputs, y:outputs}
-            _, loss, recon_loss, latent_loss, y_hat, x_hat, mu, sigma, latent_sample = sess.run([model.train_op, model.task_loss, \
-                model.recon_loss, model.latent_loss, model.y, model.x_hat, model.mu, model.si, model.latent_sample], feed_dict=feed_dict)
+            feed_dict = {x:neural_inputs, y:outputs, alpha:alpha_val}
+            _, loss, recon_loss, latent_loss, task_loss, y_hat, x_hat, mu, sigma, latent_sample = sess.run([model.train_op, model.task_loss, \
+                model.recon_loss, model.latent_loss, model.task_loss, model.y, model.x_hat, model.mu, model.si, model.latent_sample], feed_dict=feed_dict)
 
 
-            if i%50 == 0:
-                acc = get_perf(outputs,y_hat)
-                print('{} | Reconstr. Loss: {:.3f} | Latent Loss: {:.3f} | Accuracy: {:.3f} | <Sig>: {:.3f} +/- {:.3f}'.format( \
-                    i, recon_loss, latent_loss, acc, np.mean(sigma), np.std(sigma)))
+            if i%50 == 0 or i%50 == 1:
+                ind = np.intersect1d(np.argwhere(inputs[:,3]==1), np.argwhere(inputs[:,4]==0))
+                acc = get_perf(outputs[ind],y_hat[ind])
+                print('{} | Reconstr. Loss: {:.3f} | Latent Loss: {:.3f} | Task Loss: {:.3f} | Accuracy: {:.3f} | <Sig>: {:.3f} +/- {:.3f}'.format( \
+                    i, recon_loss, latent_loss, task_loss, acc, np.mean(sigma), np.std(sigma)))
                 iteration.append(i)
                 accuracy.append(acc)
 
@@ -204,25 +213,29 @@ def main():
         print("STARTING TO TEST TRAINING ON ALL QUADRANTS")
 
 
-        for i in range(par['n_train_batches_gen'],par['n_train_batches_gen']*2):
+        for i in range(par['n_train_batches_gen'],par['n_train_batches_gen']+1500):
 
             name, inputs, neural_inputs, outputs = stim.generate_trial(0, False, False)
-            feed_dict = {x:neural_inputs, y:outputs}
+            feed_dict = {x:neural_inputs, y:outputs, alpha:0.05}
             _, loss, recon_loss, latent_loss, y_hat, x_hat, mu, sigma, latent_sample = sess.run([model.train_op, model.task_loss, \
                 model.recon_loss, model.latent_loss, model.y, model.x_hat, model.mu, model.si, model.latent_sample], feed_dict=feed_dict)
 
 
-            if i%5 == 0:
+            if i%50 == 0:
+                ind = np.intersect1d(np.argwhere(inputs[:,3]==1), np.argwhere(inputs[:,4]==0))
                 acc = get_perf(outputs,y_hat)
                 print('{} | Reconstr. Loss: {:.3f} | Latent Loss: {:.3f} | Accuracy: {:.3f} | <Sig>: {:.3f} +/- {:.3f}'.format( \
                     i, recon_loss, latent_loss, acc, np.mean(sigma), np.std(sigma)))
                 iteration.append(i)
                 accuracy.append(acc)
 
+        print(iteration)
+        print(accuracy)
         plt.figure()
         plt.plot(iteration, accuracy, '-o', linestyle='-', marker='o',linewidth=2)
         plt.show()
         plt.savefig('./savedir/gen_model_learning_curve.png')
+        plt.close()
 
 
 
@@ -290,40 +303,6 @@ def main():
 
 
     print('Complete.')
-
-def visualization(stim_real, x_hat):
-    for b in range(10):
-        z = np.reshape(x_hat[b], (9,10,10))
-        y_sample_dir = int(stim_real[b,2])
-        motion = int(stim_real[b,3])
-        fix = int(stim_real[b,4])
-        vmin = np.min(z)
-        vmax = np.max(z)
-
-        fig, axes = plt.subplots(nrows=4, ncols=3, figsize=(7,7))
-        fig.suptitle("y_sample_dir: "+str(y_sample_dir)+" motion: "+str(motion)+" fix: "+str(fix))
-        i = 0
-        for ax in axes.flat:
-            im = ax.imshow(z[i,:,:], vmin=vmin, vmax=vmax, cmap='inferno')
-            i += 1
-            if (i==9):
-                break
-        cax,kw = mpl.colorbar.make_axes([ax for ax in axes.flat])
-        plt.colorbar(im, cax=cax, **kw)
-        plt.margins(tight=True)
-        plt.savefig('./savedir/recon_iter_trial{}.png'.format(b))
-        # plt.show()
-        plt.close()
-
-def get_perf(target, output):
-
-    """
-    Calculate task accuracy by comparing the actual network output to the desired output
-    only examine time points when test stimulus is on
-    in another words, when target[:,:,-1] is not 0
-    """
-    return np.sum(np.float32((np.absolute(target[:,0] - output[:,0]) < par['tol']) * (np.absolute(target[:,1] - output[:,1]) < par['tol'])))/par['batch_size']
-
 
 
 main()

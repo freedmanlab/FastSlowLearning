@@ -191,8 +191,8 @@ class MultiStimulus:
                 m = 1
                 fix = 0
 
-            mult_motion = np.random.choice([0.5, 1.0, 2.0, 3.0]) if par['variable_stim'] else 1
-            mult_fix = np.random.choice([0.5, 1.0, 2.0, 3.0]) if par['variable_stim'] else 1
+            mult_motion = np.random.choice([0.75, 1.0, 1.5]) if par['variable_stim'] else 1
+            mult_fix = np.random.choice([0.75, 1.0, 1.5]) if par['variable_stim'] else 1
 
             resp = np.zeros([par['num_motion_dirs']+1, par['n_neurons'], par['n_neurons']])
             if fix:

@@ -333,7 +333,8 @@ def main(save_fn=None, gpu_id = None):
                 _, ff_loss, ff_output = sess.run([model.train_op_ff, model.ff_loss, model.ff_output], feed_dict = {x:stim_in, target:y_hat})
 
                 if i%50 == 0:
-                    ff_acc = get_perf(y_hat, ff_output, ff=True)
+                    ind = np.intersect1d(np.argwhere(stim_real[:,3]==1), np.argwhere(stim_real[:,4]==0))
+                    ff_acc = get_perf(y_hat[ind], ff_output[ind])
                     # for b in range(20):
                         # print("m: ", stim_real[b,3], ", fix: ": stim_real[b,4])
                         # print("y_hat: ", y_hat[b], ", output: ", ff_output[b], "\n")
@@ -348,7 +349,7 @@ def main(save_fn=None, gpu_id = None):
             
 
             print("FF TRAINING ON ALL QUADRANTS")
-            for i in range(par['n_train_batches'],par['n_train_batches']*2):
+            for i in range(par['n_train_batches'],par['n_train_batches']+1500):
 
                 # make batch of training data
                 name, stim_real, stim_in, y_hat = stim.generate_trial(task, subset_dirs=False, subset_loc=False)
@@ -357,7 +358,8 @@ def main(save_fn=None, gpu_id = None):
                 _, ff_loss, ff_output = sess.run([model.train_op_ff, model.ff_loss, model.ff_output], feed_dict = {x:stim_in, target:y_hat})
 
                 if i%50 == 0:
-                    ff_acc = get_perf(y_hat, ff_output, ff=True)
+                    ind = np.intersect1d(np.argwhere(stim_real[:,3]==1), np.argwhere(stim_real[:,4]==0))
+                    ff_acc = get_perf(y_hat[ind], ff_output[ind])
                     # for b in range(20):
                         # print("m: ", stim_real[b,3], ", fix: ": stim_real[b,4])
                         # print("y_hat: ", y_hat[b], ", output: ", ff_output[b], "\n")
@@ -365,9 +367,12 @@ def main(save_fn=None, gpu_id = None):
                     iteration.append(i)
                     accuracy.append(ff_acc)
             print('FF Model execution complete.\n')
+            test(stim, model, task, sess, x, ys, ff=True, gff=False)
 
+            print(iteration)
+            print(accuracy)
             plt.figure()
-            plt.scatter(iteration, accuracy)
+            plt.plot(iteration, accuracy, '-o', linestyle='-', marker='o',linewidth=2)
             plt.show()
             plt.savefig('./savedir/ff_model_learning_curve.png')
             quit()
