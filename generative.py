@@ -66,6 +66,11 @@ class Model:
                     self.var_dict['W_rec{}'.format(h)] = tf.get_variable('W_rec{}'.format(h), shape=[par['forward_shape'][h],par['forward_shape'][h-1]])
                 self.var_dict['b_rec{}'.format(h)] = tf.get_variable('b_rec{}'.format(h), shape=[1,par['forward_shape'][h]])
 
+        with tf.variable_scope('task'):
+            self.var_dict['W_layer_in'] = tf.get_variable('W_layer_in', shape=[par['n_latent'], par['n_layer']])
+            self.var_dict['b_layer'] = tf.get_variable('b_layer', shape=[1,par['n_layer']])
+            self.var_dict['W_layer_out'] = tf.get_variable('W_layer_out', shape=[par['n_layer'],par['n_output']])
+            self.var_dict['b_layer_out'] = tf.get_variable('b_layer_out', shape=[1,par['n_output']])
 
     def run_model(self):
 
@@ -81,7 +86,7 @@ class Model:
             #act = tf.nn.dropout(act, 0.8)
             h_in.append(act)
 
-        self.y = h_in[-1] @ self.var_dict['W_out'] + self.var_dict['b_out']
+        # self.y = h_in[-1] @ self.var_dict['W_out'] + self.var_dict['b_out']
         self.pre = tf.nn.relu(h_in[-1] @ self.var_dict['W_pre'] + self.var_dict['b_pre'])
 
         self.mu = self.pre @ self.var_dict['W_mu_in'] + self.var_dict['b_mu']
@@ -89,6 +94,8 @@ class Model:
 
         ### Copy from here down to include generative setup in full network
         self.latent_sample = self.mu + tf.exp(0.5*self.si)*tf.random_normal(self.si.shape)
+        self.layer = self.latent_sample @ self.var_dict['W_layer_in'] + self.var_dict['b_layer']
+        self.y = self.layer @ self.var_dict['W_layer_out'] + self.var_dict['b_layer_out']
 
         self.post = tf.nn.relu(self.latent_sample @ self.var_dict['W_lat'] + self.var_dict['b_post'])
         #self.post = tf.nn.relu(self.mu @ self.var_dict['W_lat'] + self.var_dict['b_post'])
@@ -120,7 +127,7 @@ class Model:
 
         #self.task_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.y, labels=self.target_data, dim=1))
 
-        self.task_loss = 0.*tf.reduce_mean(tf.square(self.y - self.target_data))
+        self.task_loss = 0.1*tf.reduce_mean(tf.square(self.y - self.target_data))
         self.recon_loss = 1*tf.reduce_mean(tf.square(self.x_hat - self.input_data))
         #self.recon_loss = 1e-3*tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.x_hat, labels=self.input_data))
 

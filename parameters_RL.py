@@ -65,6 +65,7 @@ par = {
     'forward_shape'         : [900,200,80],
     'n_inter'               : 50,
     'n_latent'              : 10,
+    'n_layer'               : 5,
 
     # Connected FF and Gen Model
     'n_ys'                  : 256,
