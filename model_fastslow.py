@@ -305,6 +305,9 @@ def main(save_fn=None, gpu_id = None):
     config = tf.ConfigProto()
     #config.gpu_options.allow_growth = True
 
+    iteration = []
+    accuracy = []
+
     # Model run session
     with tf.Session(config=config) as sess:
 
@@ -335,86 +338,114 @@ def main(save_fn=None, gpu_id = None):
                         # print("m: ", stim_real[b,3], ", fix: ": stim_real[b,4])
                         # print("y_hat: ", y_hat[b], ", output: ", ff_output[b], "\n")
                     print('Iter ', i, 'Task name ', name, ' accuracy', ff_acc, ' loss ', ff_loss)
+                    iteration.append(i)
+                    accuracy.append(ff_acc)
             print('FF Model execution complete.\n')
 
             # Test all tasks at the end of each learning session
             print("FF Testing Phase")
-            test(stim, model, task, sess, x, ys, ff=True)
+            test(stim, model, task, sess, x, ys, ff=True, gff=False)
+            
+
+            print("FF TRAINING ON ALL QUADRANTS")
+            for i in range(par['n_train_batches'],par['n_train_batches']*2):
+
+                # make batch of training data
+                name, stim_real, stim_in, y_hat = stim.generate_trial(task, subset_dirs=False, subset_loc=False)
+
+                # train just ff weights
+                _, ff_loss, ff_output = sess.run([model.train_op_ff, model.ff_loss, model.ff_output], feed_dict = {x:stim_in, target:y_hat})
+
+                if i%50 == 0:
+                    ff_acc = get_perf(y_hat, ff_output, ff=True)
+                    # for b in range(20):
+                        # print("m: ", stim_real[b,3], ", fix: ": stim_real[b,4])
+                        # print("y_hat: ", y_hat[b], ", output: ", ff_output[b], "\n")
+                    print('Iter ', i, 'Task name ', name, ' accuracy', ff_acc, ' loss ', ff_loss)
+                    iteration.append(i)
+                    accuracy.append(ff_acc)
+            print('FF Model execution complete.\n')
+
+            plt.figure()
+            plt.scatter(iteration, accuracy)
+            plt.show()
+            plt.savefig('./savedir/ff_model_learning_curve.png')
+            quit()
 
 
             ################################
             ### Training Connected Model ###
             ################################
-            print('Connected Model execution starting.\n')
-            x_hats = []
-            y_samples = []
-            for i in range(par['n_train_batches_full']):
-
-                # make batch of training data
-                name, stim_real, stim_in, y_hat = stim.generate_trial(task, subset_dirs=par['subset_dirs'], subset_loc=par['subset_loc'])
-                ind = np.random.choice(np.arange(par['batch_size']), size=par['n_ys'])
-                stim_real = stim_real[ind]
-                stim_in = stim_in[ind]
-                y_sample = y_hat[ind]
-
-                # train just the conn weights
-                _, full_loss, latent_loss, full_output, x_hat, mu, si = sess.run([model.train_op_full, model.full_loss, model.latent_loss, model.full_output, model.x_hat, model.mu, model.si], feed_dict = {ys: y_sample})
-
-                if i%100 == 0:
-                    conn_acc = get_perf(y_sample, full_output, ff=False)
-                    print('Iter ', i, 'Task name ', name, ' accuracy', conn_acc, ' loss ', full_loss, ' latent_loss ',latent_loss, ' mu ', [np.mean(mu), np.std(mu)], ' si ', [np.mean(si), np.std(si)])
-                if i%500 == 0 and i!=0:
-                    visualization(stim_real, x_hat, y_sample, full_output, i)
-
-                # if i > 500:
-                    # x_hats.append(x_hat)
-                    # y_samples.append(y_sample)
-
-            print('Connected Model execution complete.\n')
-
-            # Test all tasks at the end of each learning session
-            # print("Connected Model Testing Phase")
-            # test(stim, model, task, sess, x, ys, ff=True)
-
-
-            #####################################
-            ### Training Based on X_hat Model ###
-            #####################################
             # print('Connected Model execution starting.\n')
-            # for i in range(len(x_hats)):
+            # x_hats = []
+            # y_samples = []
+            # for i in range(par['n_train_batches_full']):
 
             #     # make batch of training data
-            #     # ind = np.random.choice(np.arange(par['batch_size']), size=256)
-            #     x_hat = np.reshape(x_hats[i], (256,9,10,10))
-            #     x_hat[:,5:,5:] = 0
-            #     stim_in = np.reshape(x_hat, (256,900))
-            #     y_hat = y_samples[i]
-            #     # y_hat[ind] = y_samples[i][ind]
+            #     name, stim_real, stim_in, y_hat = stim.generate_trial(task, subset_dirs=par['subset_dirs'], subset_loc=par['subset_loc'])
+            #     ind = np.random.choice(np.arange(par['batch_size']), size=par['n_ys'])
+            #     stim_real = stim_real[ind]
+            #     stim_in = stim_in[ind]
+            #     y_sample = y_hat[ind]
 
-            #     # train just ff weights
-            #     _, ff_loss, ff_output = sess.run([model.train_op_ff, model.ff_loss, model.ff_output], feed_dict = {x:stim_in, target:y_hat})
+            #     # train just the conn weights
+            #     _, full_loss, latent_loss, full_output, x_hat, mu, si = sess.run([model.train_op_full, model.full_loss, model.latent_loss, model.full_output, model.x_hat, model.mu, model.si], feed_dict = {ys: y_sample})
 
-            #     if i%50 == 0:
-            #         ff_acc = get_perf(y_hat, ff_output, ff=True)
-            #         print('Iter ', i, 'Task name ', name, ' accuracy', ff_acc, ' loss ', ff_loss)
+            #     if i%100 == 0:
+            #         conn_acc = get_perf(y_sample, full_output, ff=False)
+            #         print('Iter ', i, 'Task name ', name, ' accuracy', conn_acc, ' loss ', full_loss, ' latent_loss ',latent_loss, ' mu ', [np.mean(mu), np.std(mu)], ' si ', [np.mean(si), np.std(si)])
+            #     if i%500 == 0 and i!=0:
+            #         visualization(stim_real, x_hat, y_sample, full_output, i)
+
+            #     # if i > 500:
+            #         # x_hats.append(x_hat)
+            #         # y_samples.append(y_sample)
+
             # print('Connected Model execution complete.\n')
 
             # # Test all tasks at the end of each learning session
-            # print("FF Testing Phase Final")
-            # test(stim, model, task, sess, x, ys, ff=True)
+            # # print("Connected Model Testing Phase")
+            # # test(stim, model, task, sess, x, ys, ff=True)
+
+
+            # #####################################
+            # ### Training Based on X_hat Model ###
+            # #####################################
+            # # print('Connected Model execution starting.\n')
+            # # for i in range(len(x_hats)):
+
+            # #     # make batch of training data
+            # #     # ind = np.random.choice(np.arange(par['batch_size']), size=256)
+            # #     x_hat = np.reshape(x_hats[i], (256,9,10,10))
+            # #     x_hat[:,5:,5:] = 0
+            # #     stim_in = np.reshape(x_hat, (256,900))
+            # #     y_hat = y_samples[i]
+            # #     # y_hat[ind] = y_samples[i][ind]
+
+            # #     # train just ff weights
+            # #     _, ff_loss, ff_output = sess.run([model.train_op_ff, model.ff_loss, model.ff_output], feed_dict = {x:stim_in, target:y_hat})
+
+            # #     if i%50 == 0:
+            # #         ff_acc = get_perf(y_hat, ff_output, ff=True)
+            # #         print('Iter ', i, 'Task name ', name, ' accuracy', ff_acc, ' loss ', ff_loss)
+            # # print('Connected Model execution complete.\n')
+
+            # # # Test all tasks at the end of each learning session
+            # # print("FF Testing Phase Final")
+            # # test(stim, model, task, sess, x, ys, ff=True)
 
 
 
-            # Reset the Adam Optimizer, and set the previous parater values to their current values
-            sess.run(model.reset_adam_op_ff)
-            sess.run(model.reset_adam_op_full)
-            if par['stabilization'] == 'pathint':
-                sess.run(model.reset_small_omega)
+            # # Reset the Adam Optimizer, and set the previous parater values to their current values
+            # sess.run(model.reset_adam_op_ff)
+            # sess.run(model.reset_adam_op_full)
+            # if par['stabilization'] == 'pathint':
+            #     sess.run(model.reset_small_omega)
 
-            # reset weights between tasks if called upon
-            if par['reset_weights']:
-                sess.run(model.reset_weights_ff)
-                sess.run(model.reset_weights_full)
+            # # reset weights between tasks if called upon
+            # if par['reset_weights']:
+            #     sess.run(model.reset_weights_ff)
+            #     sess.run(model.reset_weights_full)
 
 
 

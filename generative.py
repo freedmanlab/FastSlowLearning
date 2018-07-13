@@ -8,7 +8,9 @@ import AdamOpt
 from parameters_RL import *
 from scipy.stats import pearsonr
 import pickle
+from analysis import *
 
+par['n_latent'] = 6
 
 # Ignore startup TensorFlow warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
@@ -155,28 +157,28 @@ def main():
 
     stim = stimulus.MultiStimulus()
 
+    iteration = []
+    accuracy = []
+
     with tf.Session() as sess:
 
         sess.run(tf.global_variables_initializer())
 
         for i in range(par['n_train_batches_gen']):
 
-            name, inputs, neural_inputs, outputs = stim.generate_trial(0, False, False)
+            name, inputs, neural_inputs, outputs = stim.generate_trial(0, par['subset_dirs'], par['subset_loc'])
 
             feed_dict = {x:neural_inputs, y:outputs}
             _, loss, recon_loss, latent_loss, y_hat, x_hat, mu, sigma, latent_sample = sess.run([model.train_op, model.task_loss, \
                 model.recon_loss, model.latent_loss, model.y, model.x_hat, model.mu, model.si, model.latent_sample], feed_dict=feed_dict)
 
-            
-
-
-            #accuracy = np.mean(np.equal(lab, np.argmax(y_hat, axis=1)))
 
             if i%50 == 0:
                 acc = get_perf(outputs,y_hat)
                 print('{} | Reconstr. Loss: {:.3f} | Latent Loss: {:.3f} | Accuracy: {:.3f} | <Sig>: {:.3f} +/- {:.3f}'.format( \
                     i, recon_loss, latent_loss, acc, np.mean(sigma), np.std(sigma)))
-
+                iteration.append(i)
+                accuracy.append(acc)
 
 
             if i%500 == 0:
@@ -194,6 +196,51 @@ def main():
                 print(['loc_x','loc_y','dir','m','fix','mot_x','mot_y'])
                 print(np.round(correlation,3))
 
+        print("TRAINING ON SUBSET LOC FINISHED\n")
+        print("TESTING ON ALL QUADRANTS")
+        test(stim, model, 0, sess, x, y, ff=False, gff=True)
+
+
+        print("STARTING TO TEST TRAINING ON ALL QUADRANTS")
+
+
+        for i in range(par['n_train_batches_gen'],par['n_train_batches_gen']*2):
+
+            name, inputs, neural_inputs, outputs = stim.generate_trial(0, False, False)
+            feed_dict = {x:neural_inputs, y:outputs}
+            _, loss, recon_loss, latent_loss, y_hat, x_hat, mu, sigma, latent_sample = sess.run([model.train_op, model.task_loss, \
+                model.recon_loss, model.latent_loss, model.y, model.x_hat, model.mu, model.si, model.latent_sample], feed_dict=feed_dict)
+
+
+            if i%5 == 0:
+                acc = get_perf(outputs,y_hat)
+                print('{} | Reconstr. Loss: {:.3f} | Latent Loss: {:.3f} | Accuracy: {:.3f} | <Sig>: {:.3f} +/- {:.3f}'.format( \
+                    i, recon_loss, latent_loss, acc, np.mean(sigma), np.std(sigma)))
+                iteration.append(i)
+                accuracy.append(acc)
+
+        plt.figure()
+        plt.plot(iteration, accuracy, '-o', linestyle='-', marker='o',linewidth=2)
+        plt.show()
+        plt.savefig('./savedir/gen_model_learning_curve.png')
+
+
+
+            # if i%500 == 0:
+
+            #     correlation = np.zeros((par['n_latent'], 7))
+            #     for l in range(par['n_latent']):
+            #     # for latent_sample in latent_sample:
+            #         correlation[l,0] += pearsonr(latent_sample[:,l], inputs[:,0])[0] #x
+            #         correlation[l,1] += pearsonr(latent_sample[:,l], inputs[:,1])[0] #y
+            #         correlation[l,2] += pearsonr(latent_sample[:,l], inputs[:,2])[0] #dir_ind
+            #         correlation[l,3] += pearsonr(latent_sample[:,l], inputs[:,3])[0] #m
+            #         correlation[l,4] += pearsonr(latent_sample[:,l], inputs[:,4])[0] #fix
+            #         correlation[l,5] += pearsonr(latent_sample[:,l], outputs[:,0])[0] #motion_x
+            #         correlation[l,6] += pearsonr(latent_sample[:,l], outputs[:,1])[0] #motion_y
+            #     print(['loc_x','loc_y','dir','m','fix','mot_x','mot_y'])
+            #     print(np.round(correlation,3))
+
                 # m = []
                 # for motion in range(par['num_motion_dirs']):
                 #     m.append(np.where(inputs[:,2]==motion))
@@ -206,40 +253,40 @@ def main():
                 # plt.show()
 
 
-                var_dict = sess.run(model.generative_vars)
-                with open('./savedir/generative_var_dict_trial.pkl', 'wb') as vf:
-                    pickle.dump(var_dict, vf)
+                # var_dict = sess.run(model.generative_vars)
+                # with open('./savedir/generative_var_dict_trial.pkl', 'wb') as vf:
+                #     pickle.dump(var_dict, vf)
 
-                visualization(inputs, neural_inputs)
+                # visualization(inputs, neural_inputs)
 
-                for b in range(10):
+                # for b in range(10):
 
-                    output_string = ''
-                    output_string += '\n--- {} ---\n'.format(b)
-                    output_string += 'mu:  {}\n'.format(str(mu[b,:]))
-                    output_string += 'sig: {}\n'.format(str(sigma[b,:]))
+                #     output_string = ''
+                #     output_string += '\n--- {} ---\n'.format(b)
+                #     output_string += 'mu:  {}\n'.format(str(mu[b,:]))
+                #     output_string += 'sig: {}\n'.format(str(sigma[b,:]))
 
-                    if b == 0:
-                        rw = 'w'
-                    else:
-                        rw = 'a'
+                #     if b == 0:
+                #         rw = 'w'
+                #     else:
+                #         rw = 'a'
 
-                    with open('./savedir/recon_data_iter{}.txt'.format(i,b), rw) as f:
-                        f.write(output_string)
+                #     with open('./savedir/recon_data_iter{}.txt'.format(i,b), rw) as f:
+                #         f.write(output_string)
 
 
-                    fig, ax = plt.subplots(2,2,figsize=[8,8])
-                    for a in range(2):
-                        inp = np.sum(np.reshape(neural_inputs[b], [9,10,10]), axis=a)
-                        hat = np.sum(np.reshape(x_hat[b], [9,10,10]), axis=a)
+                #     fig, ax = plt.subplots(2,2,figsize=[8,8])
+                #     for a in range(2):
+                #         inp = np.sum(np.reshape(neural_inputs[b], [9,10,10]), axis=a)
+                #         hat = np.sum(np.reshape(x_hat[b], [9,10,10]), axis=a)
 
-                        ax[a,0].set_title('Actual (Axis {})'.format(a))
-                        ax[a,0].imshow(inp, clim=[0,1])
-                        ax[a,1].set_title('Reconstructed (Axis {})'.format(a))
-                        ax[a,1].imshow(hat, clim=[0,1])
+                #         ax[a,0].set_title('Actual (Axis {})'.format(a))
+                #         ax[a,0].imshow(inp, clim=[0,1])
+                #         ax[a,1].set_title('Reconstructed (Axis {})'.format(a))
+                #         ax[a,1].imshow(hat, clim=[0,1])
 
-                    plt.savefig('./savedir/recon_iter{}_trial{}.png'.format(i,b))
-                    plt.close(fig)
+                #     plt.savefig('./savedir/recon_iter{}_trial{}.png'.format(i,b))
+                #     plt.close(fig)
 
 
     print('Complete.')

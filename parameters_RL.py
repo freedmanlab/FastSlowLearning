@@ -55,7 +55,7 @@ par = {
     'spatial_var'           : 1.0,
     'motion_var'            : 1.0,
     'num_layers_ff'         : 3,
-    'tol'                   : 0.1,
+    'tol'                   : 0.15,
     'subset_dirs_ff'        : False,
     'subset_loc_ff'         : True,
     'subset_dirs'           : False,
@@ -65,7 +65,7 @@ par = {
     'variable_stim'         : True,
     'forward_shape'         : [900,200,80], #[900,300,150,80]
     'n_inter'               : 50,
-    'n_latent'              : 5,
+    'n_latent'              : 10, #6,
     'n_layer'               : 5,
 
     # Connected FF and Gen Model
@@ -118,9 +118,9 @@ par = {
  
     # Training specs
     'batch_size'            : 256,
-    'n_train_batches'       : 1500,
+    'n_train_batches'       : 2501,
     'n_train_batches_full'  : 10001,
-    'n_train_batches_gen'   : 7001,
+    'n_train_batches_gen'   : 9001,
 
     # Omega parameters
     'omega_c'               : 0.05,

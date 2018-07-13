@@ -154,7 +154,7 @@ def x_hat_perf(stim_real, stim_in, x_hat):
         # plt.show()
         # plt.close()
 
-def test(stim, model, task, sess, x, ys, ff):
+def test(stim, model, task, sess, x, ys, ff, gff):
     print("FF: ", ff)
     num_reps = 10
     acc = 0
@@ -173,6 +173,8 @@ def test(stim, model, task, sess, x, ys, ff):
         name, stim_real, stim_in, y_hat = stim.generate_trial(task_prime, subset_dirs=False, subset_loc=False)
         if ff:
             output = sess.run(model.ff_output, feed_dict = {x:stim_in})
+        elif gff:
+            output = sess.run(model.y, feed_dict = {x:stim_in})
         else:
             index = np.random.choice(np.arange(par['batch_size']), size=par['n_ys'])
             stim_real = stim_real[index]
