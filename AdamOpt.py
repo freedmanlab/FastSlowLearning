@@ -55,28 +55,32 @@ class AdamOpt:
         return train_op
 
 
-    def compute_gradients(self, loss):
+    def compute_gradients(self, loss, gate_prediction=False):
         self.gradients = self.grad_descent.compute_gradients(loss, var_list = self.variables)
         self.t += 1
         lr = self.learning_rate*np.sqrt(1-self.beta2**self.t)/(1-self.beta1**self.t)
         self.update_var_op = []
 
-        #grads_and_vars = []
         for (grads, _), var in zip(self.gradients, self.variables):
 
-            new_m = self.beta1*self.m[var.op.name] + (1-self.beta1)*grads
-            new_v = self.beta2*self.v[var.op.name] + (1-self.beta2)*grads*grads
+            if grads is not None:
 
-            delta_grad = - lr*new_m/(tf.sqrt(new_v) + self.epsilon)
-            delta_grad = tf.clip_by_norm(delta_grad, 1)
+                new_m = self.beta1*self.m[var.op.name] + (1-self.beta1)*grads
+                new_v = self.beta2*self.v[var.op.name] + (1-self.beta2)*grads*grads
 
-            self.update_var_op.append(tf.assign(self.m[var.op.name], new_m))
-            self.update_var_op.append(tf.assign(self.v[var.op.name], new_v))
-            #self.update_var_op.append(tf.assign(self.delta_grads[var.op.name], delta_grad))
-            self.update_var_op.append(tf.assign(self.delta_grads[var.op.name], delta_grad))
+                delta_grad = - lr*new_m/(tf.sqrt(new_v) + self.epsilon)
+                delta_grad = tf.clip_by_norm(delta_grad, 1)
+
+                self.update_var_op.append(tf.assign(self.m[var.op.name], new_m))
+                self.update_var_op.append(tf.assign(self.v[var.op.name], new_v))
+
+                if gate_prediction:
+                    if 'pred' in var.op.name:
+                        delta_grad *= 0.
+                self.update_var_op.append(tf.assign(self.delta_grads[var.op.name], delta_grad))
 
 
-            self.update_var_op.append(tf.assign_add(var, delta_grad))
+                self.update_var_op.append(tf.assign_add(var, delta_grad))
 
         return tf.group(*self.update_var_op)
 
