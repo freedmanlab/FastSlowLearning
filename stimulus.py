@@ -139,93 +139,46 @@ class MultiStimulus:
 
     def task_go(self, variant='go', offset=0, subset_dirs=False, subset_loc=False):
 
-        # t = np.random.choice(3, par['batch_size'])
-        # x = np.zeros(par['batch_size'])
-        # y = np.zeros(par['batch_size'])
-        # dir = np.zeros(par['batch_size'])
-        # dir_ind = np.zeros(par['batch_size'])
+        # Setting up
 
-        # m = (t!=2).astype(int)
-        # fix = (t!=0).astype(int)
+        resp = np.zeros([par['batch_size'], par['num_motion_dirs']+1, par['n_neurons'], par['n_neurons']])
 
-        # resp = np.zeros([par['batch_size'], par['num_motion_dirs']+1, par['n_neurons'], par['n_neurons']])
-        # resp[m,par['num_motion_dirs'],4:6,4:6] = 0
-        # if subset_dirs:
-        #     x = np.random.choice(5, par['batch_size'])
-        #     y = np.random.choice(5, par['batch_size'])
-        #     dir_ind = np.random.randint(par['num_motion_dirs']-1, par['batch_size'])
-        # else:
-        #     x = np.random.choice(par['n_neurons'], par['batch_size'])
-        #     y = np.random.choice(par['n_neurons'], par['batch_size'])
-        #     dir_ind = np.random.randint(par['num_motion_dirs'], par['batch_size'])
-        # dir = self.motion_dirs[dir_ind]
+        motion   = np.random.choice([True, False], size=par['batch_size'], p=[0.75, 0.25])
+        fixation = np.random.choice([True, False], size=par['batch_size'], p=[0.25, 0.75])
+        fixation = np.where(motion, fixation, True)
 
-        # for b in range(par['batch_size']):
-        #     if m[b]:
-        #         for mn in range(par['num_motion_dirs']):
-        #             spatial = np.exp(-1/2 * (np.square(x[b] - np.transpose(np.array([np.arange(par['n_neurons'])]*par['n_neurons']))) + np.square(y[b] - np.array([np.arange(par['n_neurons'])]*par['n_neurons']))))
-        #             ang_dist = np.angle(np.exp(1j*dir - 1j*self.motion_dirs[mn]))
-        #             motion = np.exp(-1/2 * np.square(ang_dist))
-        #             resp[b,mn,:,:] = motion * spatial
+        locs = par['n_neurons']//2 if subset_loc else par['n_neurons']
+        locations = np.random.choice(locs, size=[par['batch_size'],2])
+        direction = np.random.choice(par['num_motion_dirs'], size=[par['batch_size'],1])
 
-        # self.trial_info['input'] = np.array([x, y, dir_ind, m, fix])
-        # self.trial_info['neural_input'] = np.reshape(resp, (par['batch_size']))
-        # self.trial_info['desired_output'] = np.array([np.cos(dir), np.sin(dir)]) * m * (1-fix)
+        x_ref = np.arange(par['n_neurons'])[:,np.newaxis] * np.ones([1,par['n_neurons']])
+        y_ref = np.transpose(x_ref)
 
+        # Calculating
 
-        t = np.random.choice(4, par['batch_size'])
-        x, y, dir, dir_ind = 0, 0, 0, 0
+        x_locational = locations[:,0,np.newaxis,np.newaxis] - x_ref[np.newaxis,...]
+        y_locational = locations[:,1,np.newaxis,np.newaxis] - y_ref[np.newaxis,...]
 
-        # 0 = [motion, no fixation], 1 = [motion, fixation], 2 = [no motion, fixation]
-        for b in range(par['batch_size']):
-            if t[b] == 0:
-                m = 1
-                fix = 0
-            elif t[b] == 1:
-                m = 1
-                fix = 1
-            elif t[b] == 2:
-                m = 0
-                fix = 1
-            else:
-                m = 1
-                fix = 0
+        spatial = np.exp(-1/2 * (np.square(x_locational)+np.square(y_locational)))
+        angular = np.angle(np.exp(1j*self.motion_dirs[direction] - 1j*self.motion_dirs[np.newaxis,...]))
+        stim_motion = np.exp(-1/2 * np.square(angular))
 
-            m = 1
-            fix = 0
+        activity  = spatial[...,np.newaxis] * stim_motion[:,np.newaxis,np.newaxis,:]
+        activity *= (1. + np.random.gamma(1., size=[par['batch_size'],1,1,1]))
 
-            mult_motion = np.random.choice([0.75, 1.0, 1.5]) if par['variable_stim'] else 1
-            mult_fix = np.random.choice([0.75, 1.0, 1.5]) if par['variable_stim'] else 1
+        motion_exp = np.reshape(motion, [-1,1,1,1])
+        resp[:,:-1,:,:]     = np.where(motion_exp, np.transpose(activity, [0,3,1,2]), np.zeros([1,1,1,1]))
+        resp[:,-1,3:7,3:7]  = np.where(fixation, 1., 0.)[:,np.newaxis,np.newaxis]
 
-            resp = np.zeros([par['num_motion_dirs']+1, par['n_neurons'], par['n_neurons']])
-            if fix:
-                resp[par['num_motion_dirs'],3:7,3:7] = np.float32(1) * mult_fix
-                dir_ind = 8
-            if m:
-                if subset_loc:
-                    x = np.random.randint(5,par['n_neurons'])
-                    y = np.random.randint(5,par['n_neurons'])
-                else:
-                    x = np.random.randint(par['n_neurons'])
-                    y = np.random.randint(par['n_neurons'])
+        # x-loc, y-loc, direction, motion on/off, fixation on/off
+        self.trial_info['input'] = np.concatenate([locations, direction, motion[:,np.newaxis], fixation[:,np.newaxis]], axis=1)
 
-                dir_ind = np.random.randint(1,par['num_motion_dirs']) if subset_dirs else np.random.randint(par['num_motion_dirs'])
-                dir = self.motion_dirs[dir_ind]
+        # Neural input plus noise
+        self.trial_info['neural_input']   = np.reshape(resp, [par['batch_size'], -1]) + np.random.normal(0, 0.1, size=self.input_shape)
 
-                for mn in range(par['num_motion_dirs']):
-                    spatial = np.exp(-1/2 * (np.square(x - np.transpose(np.array([np.arange(par['n_neurons'])]*par['n_neurons']))) + np.square(y - np.array([np.arange(par['n_neurons'])]*par['n_neurons']))))
-                    ang_dist = np.angle(np.exp(1j*dir - 1j*self.motion_dirs[mn]))
-                    motion = np.exp(-1/2 * np.square(ang_dist))
-                    resp[mn,:,:] = motion * spatial * mult_motion
-
-                if fix:
-                    dir_ind = 8
-
-            self.trial_info['input'][b] = np.array([x, y, dir_ind, m, fix])
-            self.trial_info['neural_input'][b] = np.reshape(resp, (1,-1))
-            self.trial_info['desired_output'][b] = np.array([np.cos(dir), np.sin(dir)]) * m * (1-fix)
-
-            self.trial_info['neural_input'][b] += np.random.normal(0, 0.1, size=900)
+        # Desired output, multiplied by opposite fixation
+        self.trial_info['desired_output'] = np.concatenate([np.cos(self.motion_dirs[direction]), \
+                                                np.sin(self.motion_dirs[direction])], axis=1) * np.where(fixation, 0., 1.)[:,np.newaxis]
 
         return self.trial_info
 
