@@ -62,7 +62,7 @@ par = {
     'subset_loc'            : True,
 
     # gFF model
-    'variable_stim'         : True,
+    'variable_stim'         : False,
     'forward_shape'         : [900,200,80], #[900,300,150,80]
     'n_inter'               : 50,
     'n_latent'              : 10, #6,
@@ -120,7 +120,7 @@ par = {
     'batch_size'            : 256,
     'n_train_batches'       : 2501,
     'n_train_batches_full'  : 3001,
-    'n_train_batches_gen'   : 3001,
+    'n_train_batches_gen'   : 20001,
 
     # Omega parameters
     'omega_c'               : 0.05,

@@ -191,6 +191,9 @@ class MultiStimulus:
                 m = 1
                 fix = 0
 
+            m = 1
+            fix = 0
+
             mult_motion = np.random.choice([0.75, 1.0, 1.5]) if par['variable_stim'] else 1
             mult_fix = np.random.choice([0.75, 1.0, 1.5]) if par['variable_stim'] else 1
 
