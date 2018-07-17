@@ -139,6 +139,7 @@ class MultiStimulus:
 
     def task_go(self, variant='go', offset=0, subset_dirs=False, subset_loc=False):
 
+<<<<<<< HEAD
         # t = np.random.choice(3, par['batch_size'])
         # x = np.zeros(par['batch_size'])
         # y = np.zeros(par['batch_size'])
