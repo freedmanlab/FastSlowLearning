@@ -120,7 +120,7 @@ par = {
     'batch_size'            : 256,
     'n_train_batches'       : 2501,
     'n_train_batches_full'  : 3001,
-    'n_train_batches_gen'   : 20001,
+    'n_train_batches_gen'   : 17001,
 
     # Omega parameters
     'omega_c'               : 0.05,
