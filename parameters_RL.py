@@ -65,7 +65,7 @@ par = {
     'variable_stim'         : False,
     'forward_shape'         : [900,200,80], #[900,300,150,80]
     'n_inter'               : 50,
-    'n_latent'              : 10, #6,
+    'n_latent'              : 6,
     'n_layer'               : 5,
 
     # Connected FF and Gen Model

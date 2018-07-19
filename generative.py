@@ -10,8 +10,6 @@ from scipy.stats import pearsonr
 import pickle
 from analysis import *
 
-par['n_latent'] = 6
-
 # Ignore startup TensorFlow warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
 
