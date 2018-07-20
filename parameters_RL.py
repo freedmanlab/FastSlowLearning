@@ -117,7 +117,7 @@ par = {
     'U_std'                 : 0.45,
  
     # Training specs
-    'batch_size'            : 256,
+    'batch_size'            : 2800,
     'n_train_batches'       : 2501,
     'n_train_batches_full'  : 3001,
     'n_train_batches_gen'   : 1001,

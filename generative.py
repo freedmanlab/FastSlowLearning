@@ -150,12 +150,6 @@ class Model:
         for var in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='post_latent'):
             self.generative_vars[var.op.name] = var
 
-def prompt(inp):
-    time.sleep(3)
-    if inp != None:
-        return
-    print("Stop training")
-
 def main():
 
     os.environ['CUDA_VISIBLE_DEVICES'] = '2'
@@ -263,6 +257,26 @@ def main():
                     plt.colorbar()
                     plt.savefig('./savedir/latent_act_bottom'+str(i)+'.png')
                     plt.close()
+
+                    ind = np.where(inputs[:,2]==3)[0]
+                    act = np.zeros((par['n_neurons'],par['n_neurons']))
+                    act2 = np.zeros((par['n_neurons'],par['n_neurons']))
+                    for n in range(par['n_neurons']):
+                        for m in range(par['n_neurons']):
+                            temp = np.intersect1d(np.where(inputs[:,0]==n)[0],np.where(inputs[:,1]==m)[0])
+                            temp2 = np.intersect1d(ind, temp)
+                            act[n,m] = np.mean(latent_sample[temp2,0])
+                            act2[n,m] = np.mean(latent_sample[temp2,1])
+                    plt.figure()
+                    plt.subplot(1,2,1)
+                    plt.imshow(act, cmap='inferno')
+                    plt.subplot(1,2,2)
+                    plt.imshow(act2, cmap='inferno')
+                    plt.colorbar()
+                    plt.savefig('./savedir/latent_activity'+str(i)+'.png')
+                    plt.show()
+                    plt.close()
+                    
 
 
                     var_dict = sess.run(model.generative_vars)
