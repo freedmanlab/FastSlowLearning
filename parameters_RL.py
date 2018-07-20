@@ -58,8 +58,8 @@ par = {
     'tol'                   : 0.15,
     'subset_dirs_ff'        : False,
     'subset_loc_ff'         : True,
-    'subset_dirs'           : False,
-    'subset_loc'            : True,
+    'subset_dirs'           : True,
+    'subset_loc'            : False,
 
     # gFF model
     'variable_stim'         : False,

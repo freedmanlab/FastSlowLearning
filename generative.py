@@ -152,7 +152,7 @@ class Model:
 
 def main():
 
-    os.environ['CUDA_VISIBLE_DEVICES'] = '2'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '3'
 
     tf.reset_default_graph()
 
@@ -187,10 +187,12 @@ def main():
                 # else:
                 #     par['subset_loc'] = False
                 #     alpha_val = 0
-                par['subset_loc'] = False
                 alpha_val = 0.1
-                name, inputs, neural_inputs, outputs = stim.generate_trial(0, par['subset_dirs'], par['subset_loc'])
-                task_info = np.float32(inputs[:,2]<5) * alpha_val
+                name, inputs, neural_inputs, outputs = stim.generate_trial(0, False, False)
+                if par['subset_dirs']:
+                    task_info = np.float32(inputs[:,2]<6) * alpha_val
+                elif par['subset_loc']:
+                    task_info = np.float32(np.array(inputs[:,0]<5) * np.array(inputs[:,1]<5)) * alpha_val
                 task_info = task_info[:,np.newaxis]
 
                 feed_dict = {x:neural_inputs, y:outputs, info:task_info, alpha:alpha_val}
@@ -200,7 +202,10 @@ def main():
                 if i%120 == 0:
                     acc = get_perf(outputs, y_hat)
                     #ind = np.intersect1d(np.argwhere(inputs[:,0]<5), np.argwhere(inputs[:,1]<5))
-                    ind = np.where(inputs[:,2]<5)[0]
+                    if par['subset_dirs']:
+                        ind = np.where(inputs[:,2]<6)[0]
+                    elif par['subset_loc']:
+                        ind = np.intersect1d(np.argwhere(inputs[:,0]<5), np.argwhere(inputs[:,1]<5))
                     acc1 = get_perf(outputs[ind],y_hat[ind])
                     ind2 = np.setdiff1d(np.arange(256), ind)
                     acc2 = get_perf(outputs[ind2],y_hat[ind2])
@@ -214,7 +219,10 @@ def main():
                     # ind1 = all trials, ind2 = trials within the quadrant, ind3 = trials outside the quadrant
                     ind1 = np.arange(256)
                     #ind2 = np.intersect1d(np.argwhere(inputs[:,0]<5), np.argwhere(inputs[:,1]<5))
-                    ind2 = np.where(inputs[:,2]<5)[0]
+                    if par['subset_dirs']:
+                        ind2 = np.where(inputs[:,2]<5)[0]
+                    elif par['subset_loc']:
+                        ind2 = np.intersect1d(np.argwhere(inputs[:,0]<5), np.argwhere(inputs[:,1]<5))
                     ind3 = np.setdiff1d(np.arange(256), ind)
 
                     index = [ind1, ind2, ind3]
@@ -234,8 +242,8 @@ def main():
                         print("")
 
                     print("example output") #outside of the quadrant
-                    for i in range(10):
-                        print(np.round(outputs[ind3][i],3), np.round(y_hat[ind3][i],3))
+                    for q in range(10):
+                        print(np.round(outputs[ind3][q],3), np.round(y_hat[ind3][q],3))
                     print("")
 
                     print("Weight: latent x 2")
@@ -273,7 +281,7 @@ def main():
                     plt.subplot(1,2,2)
                     plt.imshow(act2, cmap='inferno')
                     plt.colorbar()
-                    plt.savefig('./savedir/latent_activity'+str(i)+'.png')
+                    plt.savefig('./savedir/latent_activity_subset_dir_'+str(i)+'.png')
                     plt.show()
                     plt.close()
                     
