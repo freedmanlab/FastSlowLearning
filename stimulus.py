@@ -209,7 +209,7 @@ class MultiStimulus:
                     x = np.random.randint(par['n_neurons'])
                     y = np.random.randint(par['n_neurons'])
 
-                dir_ind = np.random.randint(1,par['num_motion_dirs']) if subset_dirs else np.random.randint(par['num_motion_dirs'])
+                dir_ind = np.random.randint(par['num_motion_dirs']-2) if subset_dirs else np.random.randint(par['num_motion_dirs'])
                 dir = self.motion_dirs[dir_ind]
 
                 for mn in range(par['num_motion_dirs']):
