@@ -74,7 +74,7 @@ class Model:
             template = np.zeros((par['n_latent'],2), dtype=np.float32)
             template[0,0] = 1
             template[1,1] = 1
-            self.var_dict['W_layer_out'] = tf.get_variable('W_layer_out', initializer=template, trainable=False)
+            self.var_dict['W_layer_out'] = tf.get_variable('W_layer_out', initializer=template, trainable=True)
             self.var_dict['b_layer_out'] = tf.get_variable('b_layer_out', shape=[1,par['n_output']])
 
     def run_model(self):
@@ -101,7 +101,7 @@ class Model:
         # self.latent_sample = self.mu + tf.exp(0.5*self.si)*tf.random_normal(self.si.shape)
         # self.layer = self.latent_sample @ self.var_dict['W_layer_in'] + self.var_dict['b_layer']
         # self.x_hat = tf.nn.relu(self.latent_sample @ self.var_dict['W_out'] + self.var_dict['b_out'])
-        
+
         self.latent_sample = self.input_data @ self.var_dict['W_pre'] + self.var_dict['b_pre']
         self.y = self.latent_sample @ self.var_dict['W_layer_out'] + self.var_dict['b_layer_out']
 
@@ -130,8 +130,12 @@ class Model:
 
     def optimize(self):
 
+        self.variables_task = [var for var in tf.trainable_variables() if var.op.name.find('task')==0]
+        self.variables_recon = [var for var in tf.trainable_variables() if not var.op.name.find('task')==0]
+
         #opt = tf.train.GradientDescentOptimizer(par['learning_rate'])
-        opt = AdamOpt.AdamOpt(tf.trainable_variables(), par['learning_rate'])
+        opt_task = AdamOpt.AdamOpt(self.variables_task, par['learning_rate'])
+        opt_recon = AdamOpt.AdamOpt(self.variables_recon, par['learning_rate'])
 
         #self.task_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.y, labels=self.target_data, dim=1))
 
@@ -143,7 +147,8 @@ class Model:
 
         self.total_loss = self.task_loss + self.recon_loss + self.latent_loss
 
-        self.train_op = opt.compute_gradients(self.total_loss)
+        self.train_op_task = opt_task.compute_gradients(self.task_loss)
+        self.train_op_recon = opt_recon.compute_gradients(self.recon_loss+self.latent_loss)
 
 
         self.generative_vars = {}
@@ -161,8 +166,8 @@ def main():
     info = tf.placeholder(tf.float32, [par['batch_size'], 1], 'info')
     alpha = tf.placeholder(tf.float32, [], 'alpha')
 
-    with tf.device('/gpu:0'):
-        model = Model(x, y, info, alpha)
+    #with tf.device('/gpu:0'):
+    model = Model(x, y, info, alpha)
     #model = Model(x, y, alpha)
 
     stim = stimulus.MultiStimulus()
@@ -196,10 +201,15 @@ def main():
                 task_info = task_info[:,np.newaxis]
 
                 feed_dict = {x:neural_inputs, y:outputs, info:task_info, alpha:alpha_val}
-                _, loss, recon_loss, latent_loss, task_loss, y_hat, x_hat, mu, sigma, latent_sample, weight = sess.run([model.train_op, model.task_loss, model.recon_loss, model.latent_loss, model.task_loss, model.y, model.x_hat, model.mu, model.si, model.latent_sample, model.var_dict['W_layer_out']], feed_dict=feed_dict)
+
+                if i%2 ==0:
+                    _, loss, recon_loss, latent_loss, task_loss, y_hat, x_hat, mu, sigma, latent_sample, weight = sess.run([model.train_op_recon, model.task_loss, model.recon_loss, model.latent_loss, model.task_loss, model.y, model.x_hat, model.mu, model.si, model.latent_sample, model.var_dict['W_layer_out']], feed_dict=feed_dict)
+                else:
+                    _, loss, recon_loss, latent_loss, task_loss, y_hat, x_hat, mu, sigma, latent_sample, weight = sess.run([model.train_op_task, model.task_loss, model.recon_loss, model.latent_loss, model.task_loss, model.y, model.x_hat, model.mu, model.si, model.latent_sample, model.var_dict['W_layer_out']], feed_dict=feed_dict)
 
 
-                if i%120 == 0:
+
+                if i%100 == 0:
                     acc = get_perf(outputs, y_hat)
                     #ind = np.intersect1d(np.argwhere(inputs[:,0]<5), np.argwhere(inputs[:,1]<5))
                     if par['subset_dirs']:
@@ -214,8 +224,48 @@ def main():
                     iteration.append(i)
                     accuracy.append(acc)
 
+                if i%100 == 1:
+                    acc = get_perf(outputs, y_hat)
+                    #ind = np.intersect1d(np.argwhere(inputs[:,0]<5), np.argwhere(inputs[:,1]<5))
+                    if par['subset_dirs']:
+                        ind = np.where(inputs[:,2]<6)[0]
+                    elif par['subset_loc']:
+                        ind = np.intersect1d(np.argwhere(inputs[:,0]<5), np.argwhere(inputs[:,1]<5))
+                    acc1 = get_perf(outputs[ind],y_hat[ind])
+                    ind2 = np.setdiff1d(np.arange(256), ind)
+                    acc2 = get_perf(outputs[ind2],y_hat[ind2])
+                    print('{} | Reconstr. Loss: {:.3f} | Latent Loss: {:.3f} | Task Loss: {:.3f} | Accuracy: {:.3f} | Accuracy1: {:.3f} | Accuracy2: {:.3f} | <Sig>: {:.3f} +/- {:.3f}'.format( \
+                    i, recon_loss, latent_loss, task_loss, acc, acc1, acc2, np.mean(sigma), np.std(sigma)))
+                    iteration.append(i)
+                    accuracy.append(acc)
 
-                if i%480 == 0:
+                if i%500 == 0:
+                    # ind1 = all trials, ind2 = trials within the quadrant, ind3 = trials outside the quadrant
+                    ind1 = np.arange(256)
+                    #ind2 = np.intersect1d(np.argwhere(inputs[:,0]<5), np.argwhere(inputs[:,1]<5))
+                    if par['subset_dirs']:
+                        ind2 = np.where(inputs[:,2]<5)[0]
+                    elif par['subset_loc']:
+                        ind2 = np.intersect1d(np.argwhere(inputs[:,0]<5), np.argwhere(inputs[:,1]<5))
+                    ind3 = np.setdiff1d(np.arange(256), ind)
+
+                    index = [ind1, ind2, ind3]
+                    for ind in index:
+                        correlation = np.zeros((par['n_latent'], 7))
+                        for l in range(par['n_latent']):
+                            # for latent_sample in latent_sample:
+                            correlation[l,0] += pearsonr(latent_sample[ind,l], inputs[ind,0])[0] #x
+                            correlation[l,1] += pearsonr(latent_sample[ind,l], inputs[ind,1])[0] #y
+                            correlation[l,2] += pearsonr(latent_sample[ind,l], inputs[ind,2])[0] #dir_ind
+                            correlation[l,3] += pearsonr(latent_sample[ind,l], inputs[ind,3])[0] #m
+                            correlation[l,4] += pearsonr(latent_sample[ind,l], inputs[ind,4])[0] #fix
+                            correlation[l,5] += pearsonr(latent_sample[ind,l], outputs[ind,0])[0] #motion_x
+                            correlation[l,6] += pearsonr(latent_sample[ind,l], outputs[ind,1])[0] #motion_y
+                        print(['loc_x','loc_y','dir','m','fix','mot_x','mot_y'])
+                        print(np.round(correlation,3))
+                        print("")
+
+                if i%500 == 1:
                     # ind1 = all trials, ind2 = trials within the quadrant, ind3 = trials outside the quadrant
                     ind1 = np.arange(256)
                     #ind2 = np.intersect1d(np.argwhere(inputs[:,0]<5), np.argwhere(inputs[:,1]<5))
@@ -282,9 +332,9 @@ def main():
                     plt.imshow(act2, cmap='inferno')
                     plt.colorbar()
                     plt.savefig('./savedir/latent_activity_subset_dir_'+str(i)+'.png')
-                    plt.show()
-                    plt.close()
-                    
+                    #plt.show()
+                    #plt.close()
+
 
 
                     var_dict = sess.run(model.generative_vars)
@@ -292,7 +342,7 @@ def main():
                         pickle.dump(var_dict, vf)
 
                     # visualization(inputs, neural_inputs)
-    
+
                     for b in range(10):
 
                         output_string = ''
@@ -318,7 +368,7 @@ def main():
                             ax[a,0].imshow(inp, clim=[0,1])
                             ax[a,1].set_title('Reconstructed (Axis {})'.format(a))
                             ax[a,1].imshow(hat, clim=[0,1])
- 
+
                         plt.savefig('./savedir/recon_iter{}_trial{}.png'.format(i,b))
                         plt.close(fig)
 
@@ -329,7 +379,7 @@ def main():
             if ['dynamic_training']:
                 inp = input("Would you like to continue training? (y/n)\n")
                 train = True if (inp in ["y","Y","Yes","yes","True"]) else False
-            
+
                 if train:
                     par['n_train_batches_gen'] = int(input("Enter how many iterations: "))
             else:
@@ -344,7 +394,7 @@ def main():
             name, inputs, neural_inputs, outputs = stim.generate_trial(0, False, False)
             task_info = np.ones([par['batch_size'],1])
             feed_dict = {x:neural_inputs, y:outputs, info:task_info, alpha:0.05}
-            _, loss, recon_loss, latent_loss, y_hat, x_hat, mu, sigma, latent_sample = sess.run([model.train_op, model.task_loss, \
+            _, _, loss, recon_loss, latent_loss, y_hat, x_hat, mu, sigma, latent_sample = sess.run([model.train_op_task, model.train_op_recon, model.task_loss, \
                 model.recon_loss, model.latent_loss, model.y, model.x_hat, model.mu, model.si, model.latent_sample], feed_dict=feed_dict)
 
 
@@ -366,7 +416,7 @@ def main():
 
 
 
-            
+
 
 
     print('Complete.')

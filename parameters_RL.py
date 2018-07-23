@@ -57,9 +57,9 @@ par = {
     'num_layers_ff'         : 3,
     'tol'                   : 0.15,
     'subset_dirs_ff'        : False,
-    'subset_loc_ff'         : True,
-    'subset_dirs'           : True,
-    'subset_loc'            : False,
+    'subset_loc_ff'         : False,
+    'subset_dirs'           : False,
+    'subset_loc'            : True,
 
     # gFF model
     'variable_stim'         : False,
@@ -115,7 +115,7 @@ par = {
     'tau_slow'              : 1000,
     'U_stf'                 : 0.15,
     'U_std'                 : 0.45,
- 
+
     # Training specs
     'batch_size'            : 2800,
     'n_train_batches'       : 2501,
