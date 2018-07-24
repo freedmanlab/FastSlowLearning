@@ -159,13 +159,14 @@ class Model:
         self.task_loss = tf.reduce_mean(tf.multiply(self.input_info, tf.square(self.y - self.target_data)))
         self.recon_loss = 1*tf.reduce_mean(tf.square(self.x_hat - self.input_data))
         '''
-        #self.recon_loss = 1e-3*tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.x_hat, labels=self.input_data))
+        self.gen_loss = 1e-3 * tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.x_hat, labels=self.input_data))
 
         self.latent_loss = 8e-4 * -0.5*tf.reduce_mean(tf.reduce_sum(1+self.si-tf.square(self.mu)-tf.exp(self.si),axis=-1))
-        #self.gen_loss = tf.reduce_mean(-0.5*self.si_x_list - tf.square(self.x_hat - self.mu_x_list)/(2*tf.exp(self.si_x_list)))
-        self.gen_loss = 1.5* tf.reduce_mean(self.x_hat_dist.log_prob(self.input_data))
+        #self.gen_loss = tf.reduce_mean(-0.5*self.si_x - tf.square(self.x_hat - self.mu_x)/(2*tf.exp(self.si_x)))
+
+        #self.gen_loss = tf.reduce_mean(self.x_hat_dist.log_prob(self.input_data))
         #self.total_loss = self.task_loss + self.recon_loss + self.latent_loss
-        self.total_loss = self.latent_loss - self.gen_loss
+        self.total_loss = self.latent_loss + self.gen_loss
 
         self.train_op = opt.compute_gradients(self.total_loss)
 
